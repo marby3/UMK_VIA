@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UIAPduino VIA - WebHID Configurator</title>
+    <meta name="description" content="A powerful WebHID configurator for the UIAPduino custom keyboard.">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Outfit:wght@700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+    <script src="protocol.js" defer></script>
+    <script src="hid_app.js" defer></script>
+</head>
+<body>
+    <div id="app" class="glass-container">
+        <header>
+            <h1 class="glow-text">UIAPduino Via</h1>
+            <p class="subtitle">Ultimate WebHID Keyboard Control</p>
+        </header>
+
+        <section class="controls">
+            <div class="connection-status">
+                <span id="statusIndicator" class="indicator disconnected"></span>
+                <span id="statusText">デバイス未接続</span>
+            </div>
+            <div class="actions">
+                <button id="btnConnect" class="glow-btn">デバイスに接続</button>
+                <button id="btnSaveToFlash" class="danger-btn" disabled>Flashに保存 (再起動)</button>
+            </div>
+        </section>
+
+        <section class="editor-section">
+            <div class="layer-selector">
+                <label>Layer:</label>
+                <button class="layer-btn active" data-layer="0">0</button>
+                <button class="layer-btn" data-layer="1">1</button>
+                <button class="layer-btn" data-layer="2">2</button>
+                <button class="layer-btn" data-layer="3">3</button>
+            </div>
+
+            <!-- 4x6 キーマトリックスを生成する場所 -->
+            <div id="keyboardGrid" class="keyboard-grid"></div>
+        </section>
+        
+        <!-- モーダル: キーアサイン変更 -->
+        <div id="keyBindModal" class="modal hidden">
+            <div class="modal-content glass-panel">
+                <div class="modal-header">
+                    <h2>キーのアサイン</h2>
+                    <button class="close-btn" id="modalClose">×</button>
+                </div>
+                <div class="modal-body">
+                    <p>割り当てたい役割を選んでください</p>
+                    <select id="keycodeSelect" class="modern-select">
+                        <!-- JSで動的に追加 -->
+                    </select>
+                </div>
+                <div class="modal-footer">
+                    <button id="btnApplyKey" class="glow-btn">適用する</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,12 @@
+# Build output
+*.elf
+*.bin
+*.hex
+*.map
+*.lst
+*.o
+*.a
+
+# Editor/OS files
+.DS_Store
+.vscode/
