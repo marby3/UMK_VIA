@@ -2,7 +2,7 @@ const protocol = new UIAPduinoProtocol();
 
 // QMKの標準的な基本的なキーコードリスト (一部抜粋)
 const QMK_KEYCODES = {
-  0x00: '未割当',
+  0x00: '未割当 / 透過',
   0x04: 'A', 0x05: 'B', 0x06: 'C', 0x07: 'D', 0x08: 'E', 0x09: 'F', 0x0A: 'G',
   0x0B: 'H', 0x0C: 'I', 0x0D: 'J', 0x0E: 'K', 0x0F: 'L', 0x10: 'M', 0x11: 'N',
   0x12: 'O', 0x13: 'P', 0x14: 'Q', 0x15: 'R', 0x16: 'S', 0x17: 'T', 0x18: 'U',
@@ -15,7 +15,13 @@ const QMK_KEYCODES = {
   0x3F: 'F6', 0x40: 'F7', 0x41: 'F8', 0x42: 'F9', 0x43: 'F10', 0x44: 'F11', 0x45: 'F12',
   0x4F: 'Right', 0x50: 'Left', 0x51: 'Down', 0x52: 'Up',
   0xE0: 'L Ctrl', 0xE1: 'L Shift', 0xE2: 'L Alt', 0xE3: 'L GUI',
-  0xE4: 'R Ctrl', 0xE5: 'R Shift', 0xE6: 'R Alt', 0xE7: 'R GUI'
+  0xE4: 'R Ctrl', 0xE5: 'R Shift', 0xE6: 'R Alt', 0xE7: 'R GUI',
+  
+  // Custom Layer Keys
+  0xFFFF: '▽ (TRNS / 透過)',
+  0x0101: 'MO(1)', 0x0102: 'MO(2)', 0x0103: 'MO(3)',
+  0x0201: 'TG(1)', 0x0202: 'TG(2)', 0x0203: 'TG(3)',
+  0x0300: 'TO(0)', 0x0301: 'TO(1)', 0x0302: 'TO(2)', 0x0303: 'TO(3)'
 };
 
 // 内部状態 (デフォルト値で初期化)
@@ -97,12 +103,14 @@ function updateConnectionStatus() {
         elBtnConnect.disabled = true;
         elBtnSaveToFlash.disabled = false;
         elBtnConnect.textContent = '接続済み';
+        elBtnSaveToFlash.textContent = 'Flashに保存（再起動）';
     } else {
         elStatusIndicator.className = 'indicator disconnected';
         elStatusText.textContent = 'デバイス未接続';
         elBtnConnect.disabled = false;
         elBtnSaveToFlash.disabled = true;
         elBtnConnect.textContent = 'デバイスに接続';
+        elBtnSaveToFlash.textContent = 'Flashに保存（再起動）'; // 元に戻す
     }
 }
 

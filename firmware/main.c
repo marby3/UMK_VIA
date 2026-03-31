@@ -26,10 +26,14 @@ int main()
     // Phase 2: ピンの初期化
     matrix_init();
     
+    // Phase 6: キーコードキャッシュとレイヤー状態の初期化
+    keymap_init();
+    
     // Phase 1: USBセットアップ
 	usb_setup();
 
 	uint32_t system_millis = 0;
+    static uint8_t last_matrix_state[MATRIX_ROWS][MATRIX_COLS] = {0};
 
 	while(1)
 	{
@@ -46,7 +50,21 @@ int main()
         
         // 状態が変化した場合、USBレポートを作り直す
         if (changed) {
-            keymap_generate_report(matrix_state, current_keyboard_report);
+            for(int r = 0; r < MATRIX_ROWS; r++){
+                for(int c = 0; c < MATRIX_COLS; c++){
+                    // 変化があったキーのエッジ検出
+                    if (matrix_state[r][c] != last_matrix_state[r][c]) {
+                        if (matrix_state[r][c] == 1) {
+                            keymap_process_press(r, c); // 押された瞬間
+                        } else {
+                            keymap_process_release(r, c); // 離された瞬間
+                        }
+                        last_matrix_state[r][c] = matrix_state[r][c]; // 状態更新
+                    }
+                }
+            }
+            // キャッシュ情報から最新のUSBレポートを構築
+            keymap_generate_report(current_keyboard_report);
         }
 	}
 }
