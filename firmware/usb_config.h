@@ -18,6 +18,18 @@
 
 #ifndef __ASSEMBLER__
 
+#if __has_include("custom_config.h")
+#include "custom_config.h"
+#endif
+
+#ifndef CUSTOM_VID
+#define CUSTOM_VID 0x1209
+#endif
+
+#ifndef CUSTOM_PID
+#define CUSTOM_PID 0xB803
+#endif
+
 #include <tinyusb_hid.h>
 
 #ifdef INSTANCE_DESCRIPTORS
@@ -30,8 +42,8 @@ static const uint8_t device_descriptor[] = {
 	0x0, //Device Subclass
 	0x0, //Device Protocol
 	0x08, //Max packet size for EP0 (8 bytes)
-	0x09, 0x12, //ID Vendor (0x1209)
-	0x03, 0xc0, //ID Product (0xc003 - standard for Custom/Multi PID)
+	(CUSTOM_VID & 0xFF), ((CUSTOM_VID >> 8) & 0xFF), //ID Vendor
+	(CUSTOM_PID & 0xFF), ((CUSTOM_PID >> 8) & 0xFF), //ID Product
 	0x02, 0x00, //ID Rev
 	1, //Manufacturer string
 	2, //Product string
@@ -161,8 +173,12 @@ static const uint8_t config_descriptor[] = {
 	10, // bInterval (10ms)
 };
 
+#ifndef STR_MANUFACTURER
 #define STR_MANUFACTURER u"UIAPduino"
+#endif
+#ifndef STR_PRODUCT
 #define STR_PRODUCT      u"UIAPduino_VIA"
+#endif
 #ifndef STR_SERIAL
 #define STR_SERIAL       u"001"
 #endif

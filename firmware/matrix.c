@@ -1,8 +1,17 @@
 #include "ch32fun.h"
 #include "matrix.h"
 
+#ifdef CUSTOM_ROW_PINS
+static const uint32_t row_pins[MATRIX_ROWS] = CUSTOM_ROW_PINS;
+#else
 static const uint32_t row_pins[MATRIX_ROWS] = { PC0, PC1, PC2, PC3 };
+#endif
+
+#ifdef CUSTOM_COL_PINS
+static const uint32_t col_pins[MATRIX_COLS] = CUSTOM_COL_PINS;
+#else
 static const uint32_t col_pins[MATRIX_COLS] = { PC4, PC5, PC6, PC7, PD0, PD2 };
+#endif
 
 static uint8_t raw_state[MATRIX_ROWS][MATRIX_COLS] = {0};
 static uint32_t debounce_time[MATRIX_ROWS][MATRIX_COLS] = {0};

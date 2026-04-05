@@ -3,8 +3,21 @@
 
 #include <stdint.h>
 
+#if __has_include("custom_config.h")
+#include "custom_config.h"
+#endif
+
+#ifndef CUSTOM_MATRIX_ROWS
 #define MATRIX_ROWS 4
+#else
+#define MATRIX_ROWS CUSTOM_MATRIX_ROWS
+#endif
+
+#ifndef CUSTOM_MATRIX_COLS
 #define MATRIX_COLS 6
+#else
+#define MATRIX_COLS CUSTOM_MATRIX_COLS
+#endif
 
 // Initialize the matrix GPIO pins
 void matrix_init(void);
