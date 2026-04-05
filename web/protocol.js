@@ -14,8 +14,8 @@ class UIAPduinoProtocol {
         }
 
         try {
-            // UIAPduino_VIAの VID: 0x1209, PID: 0xC003 を指定 (usb_config.hの定義依存)
-            const filters = [{ vendorId: 0x1209, productId: 0xc003 }];
+            // カスタムビルドされた様々なVID/PIDに対応できるよう、Vendor Defined (0xFF00) を持つデバイス全体を探す
+            const filters = [{ usagePage: 0xFF00 }];
             const devices = await navigator.hid.requestDevice({ filters });
             
             if (devices.length > 0) {

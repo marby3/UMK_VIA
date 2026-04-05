@@ -6,59 +6,467 @@
     <title>UIAPduino VIA - WebHID Configurator</title>
     <meta name="description" content="A powerful WebHID configurator for the UIAPduino custom keyboard.">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Outfit:wght@700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="styles.css">
-    <script src="protocol.js" defer></script>
-    <script src="hid_app.js" defer></script>
+    <script src="protocol.js?v=11" defer></script>
+    <script src="hid_app.js?v=11" defer></script>
+    <script src="builder_app.js?v=11" defer></script>
+    <script src="tester_app.js?v=11" defer></script>
+    <script src="flasher_app.js?v=11" defer></script>
 </head>
 <body>
-    <div id="app" class="glass-container">
-        <header>
-            <h1 class="glow-text">UIAPduino Via</h1>
-            <p class="subtitle">Ultimate WebHID Keyboard Control</p>
-        </header>
-
-        <section class="controls">
-            <div class="connection-status">
-                <span id="statusIndicator" class="indicator disconnected"></span>
-                <span id="statusText">デバイス未接続</span>
+    <script>
+        // Force refresh for development (CSS)
+        document.write('<link rel="stylesheet" href="styles.css?v=' + Date.now() + '">');
+        document.write('<link rel="stylesheet" href="builder_app.css?v=' + Date.now() + '">');
+    </script>
+    <style>
+        /* Fallback for immediately fixing the overlay display inline bug if style.css is still stubborn */
+        .keymap-overlay.hidden { display: none !important; }
+        .keymap-overlay { position: absolute; z-index: 100; left: 0; right: 0; top: 0; bottom: 0; display: flex; align-items:center; justify-content:center; }
+    </style>
+    <!-- トップナビゲーション -->
+    <nav id="topNav" class="top-nav glass-panel">
+        <div class="nav-left">
+            <div class="nav-brand glow-text-small">
+                <span class="brand-icon">⌨️</span>
+                <span>UIAPduino</span>
             </div>
-            <div class="actions">
-                <button id="btnConnect" class="glow-btn">デバイスに接続</button>
-                <button id="btnSaveToFlash" class="danger-btn" disabled>Flashに保存 (再起動)</button>
-            </div>
-        </section>
+        </div>
+        <div class="nav-spacer"></div>
+        <div class="nav-center">
+            <button class="nav-item" data-target="flasher">ファーム書き込み</button>
+            <button class="nav-item active" data-target="keymap">キーマッピング</button>
+            <button class="nav-item" data-target="tester">動作テスター</button>
+            <button class="nav-item" data-target="dev">開発ユーザー</button>
+            <button class="nav-item" data-target="settings">設定</button>
+        </div>
+        <div class="nav-spacer"></div>
+        <div class="nav-right">
+            <button class="nav-item" data-target="links">リンク集</button>
+        </div>
+    </nav>
 
-        <section class="editor-section">
-            <div class="layer-selector">
-                <label>Layer:</label>
-                <button class="layer-btn active" data-layer="0">0</button>
-                <button class="layer-btn" data-layer="1">1</button>
-                <button class="layer-btn" data-layer="2">2</button>
-                <button class="layer-btn" data-layer="3">3</button>
-            </div>
+    <main class="main-content">
+        <!-- =============== キーマッピング (Keymap) =============== -->
+        <div id="view-keymap" class="app-view active glass-container">
+            <header>
+                <h1 class="glow-text">UIAPduino Via</h1>
+                <p class="subtitle">Ultimate WebHID Keyboard Control</p>
+            </header>
 
-            <!-- 4x6 キーマトリックスを生成する場所 -->
-            <div id="keyboardGrid" class="keyboard-grid"></div>
-        </section>
-        
-        <!-- モーダル: キーアサイン変更 -->
-        <div id="keyBindModal" class="modal hidden">
-            <div class="modal-content glass-panel">
-                <div class="modal-header">
-                    <h2>キーのアサイン</h2>
-                    <button class="close-btn" id="modalClose">×</button>
+            <section class="controls" style="position:relative; z-index: 10;">
+                <div class="connection-status">
+                    <span id="statusIndicator" class="indicator disconnected"></span>
+                    <span id="statusText">デバイス未接続</span>
                 </div>
-                <div class="modal-body">
-                    <p>割り当てたい役割を選んでください</p>
-                    <select id="keycodeSelect" class="modern-select">
-                        <!-- JSで動的に追加 -->
+                <div class="actions">
+                    <button id="btnConnect" class="glow-btn">デバイスに接続</button>
+                    <label class="glow-btn" style="cursor: pointer;">
+                        ↑ Upload JSON
+                        <input type="file" id="uploadConfigJson" accept=".json" style="display:none;">
+                    </label>
+                </div>
+            </section>
+
+            <!-- OVERLAY (New) -->
+            <div id="keymapOverlay" class="keymap-overlay glass-panel">
+                <div class="overlay-content">
+                    <h2>🔌 デバイスに接続してください</h2>
+                    <p style="margin-top: 10px; color: #aaa;">まずは下のボタンでデバイスとリンクするか、<br>保存済みのJSONレイアウトを読み込ませてください。</p>
+                    <div style="display:flex; justify-content:center; gap:16px; margin-top:24px;">
+                        <button id="btnConnectOverlay" class="glow-btn" style="padding: 12px 32px; font-size: 1.1rem;">デバイスに接続して開始</button>
+                        <label class="glow-btn" style="padding: 12px 32px; font-size: 1.1rem; cursor: pointer; display:flex; align-items:center;">
+                            ↑ Upload JSON
+                            <input type="file" id="uploadConfigJsonOverlay" accept=".json" style="display:none;">
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- KEYBOARD WORKSPACE -->
+            <section class="editor-section" id="keymapWorkspace">
+                <div class="layer-selector">
+                    <label>Layer:</label>
+                    <button class="layer-btn active" data-layer="0">0</button>
+                    <button class="layer-btn" data-layer="1">1</button>
+                    <button class="layer-btn" data-layer="2">2</button>
+                    <button class="layer-btn" data-layer="3">3</button>
+                </div>
+
+                <!-- Canvas for rendered layout -->
+                <div class="layout-canvas-container" id="keymapCanvasContainer" style="margin-top: 16px; min-height: 300px; background: rgba(0,0,0,0.2);">
+                    <div id="keymapCanvas" class="layout-canvas">
+                        <!-- Keys rendered here dynamically by JS -->
+                    </div>
+                </div>
+
+                <div class="actions" style="margin-top: 16px; justify-content: flex-end;">
+                    <button id="btnResetKeymap" class="danger-btn">キーマップ初期化 (元に戻す)</button>
+                    <button id="btnSaveToFlash" class="glow-btn" disabled>設定をFlashに保存</button>
+                </div>
+
+                <!-- BOTTOM HALF: KEYCODE PALETTE -->
+                <div class="properties-board" id="palettePanel" style="margin-top: 16px;">
+                    <div class="props-header" style="display:flex; justify-content:space-between; align-items:center;">
+                        <span>Keycode Palette</span>
+                        <div class="palette-modifiers" style="display:flex; gap:12px; font-size: 0.9rem;">
+                            <label><input type="checkbox" id="modCtrl"> LCtrl</label>
+                            <label><input type="checkbox" id="modShift"> LShift</label>
+                            <label><input type="checkbox" id="modAlt"> LAlt</label>
+                            <label><input type="checkbox" id="modWin"> LGUI</label>
+                        </div>
+                    </div>
+                    <div class="builder-tabs" style="justify-content: flex-start; padding: 0 16px;">
+                        <button class="builder-tab active" data-cat="basic">Basic (A-Z, Num)</button>
+                        <button class="builder-tab" data-cat="layers">Layers & System</button>
+                    </div>
+                    
+                    <div id="cat-basic" class="tab-pane" style="padding: 16px;">
+                        <div class="palette-grid" id="paletteBasicGrid"></div>
+                    </div>
+                    <div id="cat-layers" class="tab-pane hidden" style="padding: 16px;">
+                        <div class="palette-grid" id="paletteLayersGrid"></div>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <!-- =============== ファーム書き込み (Flasher) =============== -->
+        <div id="view-flasher" class="app-view hidden glass-container">
+            <header>
+                <h1 class="glow-text">Web Flasher</h1>
+                <p class="subtitle">ブラウザから直接ファームウェアを書き込みます</p>
+            </header>
+            
+            <section class="flasher-section" style="max-width: 600px; margin: 40px auto; display: flex; flex-direction: column; gap: 24px;">
+                <div class="glass-panel" id="flasherFileWrapper" style="padding: 24px; text-align: center;">
+                    <h3 style="margin-bottom: 16px;">ファームウェアの選択</h3>
+                    <div id="flasherCacheWarning" class="hidden" style="color:var(--success-color); background:rgba(0,255,128,0.1); padding:12px; border-radius:8px; border:1px solid var(--success-color); font-weight:600; margin-bottom:16px;">
+                        🌟 直前にビルドしたファームウェアがセットされています！そのまま書き込み可能です。
+                    </div>
+                    <label class="glow-btn" style="cursor: pointer; display: inline-block;">
+                        📁 ファイルを選択 (.bin)
+                        <input type="file" id="flasherFileInput" accept=".bin" style="display:none;">
+                    </label>
+                    <p class="help-text" style="font-size: 0.85rem; color: #888; margin-top: 12px;">（アップロードしたファイルが優先されます）</p>
+                </div>
+
+                <div class="glass-panel" style="padding: 24px;">
+                    <div style="display: flex; flex-direction: column; gap: 16px;">
+                        <button id="btnFlashAction" class="glow-btn" style="padding: 16px; font-size: 1.2rem; display: flex; justify-content: center; align-items: center; gap: 12px;" disabled>
+                            ⚡️ デバイスへ書き込み開始
+                        </button>
+                        
+                        <div style="text-align: center; height: 24px;">
+                            <span id="flasherStatusText" class="hidden glow-text-small" style="font-weight: 600; color: var(--secondary-color);">待機中...</span>
+                        </div>
+
+                        <div id="flasherProgress" class="hidden" style="width: 100%; height: 20px; background: rgba(0,0,0,0.5); border-radius: 10px; overflow: hidden; border: 1px solid var(--glass-border); position: relative;">
+                            <div id="flasherProgressBar" style="height: 100%; width: 0%; background: linear-gradient(90deg, var(--primary-color), var(--secondary-color)); transition: width 0.2s;"></div>
+                            <span id="flasherProgressText" style="position: absolute; width: 100%; text-align: center; color: white; font-size: 0.8rem; font-weight: bold; top: 50%; transform: translateY(-50%); text-shadow: 1px 1px 2px black;">0%</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="glass-panel" style="padding: 16px;">
+                    <h3 style="font-size: 1rem; margin-bottom: 8px;">書き込みログ</h3>
+                    <pre id="flasherLog" style="background: rgba(0,0,0,0.8); color: #0f0; border: 1px solid var(--glass-border); border-radius: 4px; height: 150px; overflow-y: auto; padding: 8px; font-size: 0.85rem; margin: 0;"></pre>
+                </div>
+            </section>
+        </div>
+
+        <!-- =============== 動作テスター (Tester) =============== -->
+        <div id="view-tester" class="app-view hidden glass-container">
+            <header>
+                <h1 class="glow-text">Key Tester</h1>
+                <p class="subtitle">打鍵テストを行い、全キーが正常に反応するか視覚的に確認します</p>
+            </header>
+            
+            <section class="tester-controls" style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 24px;">
+                <div class="layout-source-info">
+                    <span id="testerLayoutStatus" style="font-weight: 600; color: var(--secondary-color);">標準レイアウト (109日本語) を表示中</span>
+                </div>
+                <div style="display:flex; gap: 16px;">
+                    <label class="glow-btn" style="cursor: pointer;">
+                        ↑ Upload JSON
+                        <input type="file" id="testerUploadJson" accept=".json" style="display:none;">
+                    </label>
+                    <button id="btnTesterReset" class="danger-btn">ログ・履歴をリセット</button>
+                    <select id="testerLayoutSelect" class="modern-select">
+                        <option value="custom">カスタムレイアウト (読込済)</option>
+                        <option value="109">標準 109 日本語</option>
+                        <option value="104">標準 104 英語</option>
                     </select>
                 </div>
-                <div class="modal-footer">
-                    <button id="btnApplyKey" class="glow-btn">適用する</button>
+            </section>
+
+            <section class="editor-section" id="testerWorkspace">
+                <!-- Canvas for rendered layout -->
+                <div class="layout-canvas-container" id="testerCanvasContainer" style="background: rgba(0,0,0,0.4); border: 2px solid var(--glass-border); position: relative; overflow:visible;">
+                    <div id="testerCanvas" class="layout-canvas" style="pointer-events: none;">
+                        <!-- Tester Keys rendered here dynamically -->
+                    </div>
+                </div>
+
+                <div class="tester-log-board" style="margin-top: 24px;">
+                    <h3>入力履歴ログ</h3>
+                    <div id="testerLogContainer" style="background: #000; border: 1px solid var(--glass-border); border-radius: 8px; height: 180px; overflow-y: auto; padding: 12px; font-family: monospace; font-size: 0.9rem; color: #bbb;">
+                        <!-- イベントログがここに追加されます -->
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <!-- =============== 開発ユーザー (Dev & Layout) =============== -->
+        <div id="view-dev" class="app-view hidden glass-container">
+            <header>
+                <h1 class="glow-text">Keyboard Builder</h1>
+                <p class="subtitle">ファームウェア作成・キーボード定義エディタ</p>
+            </header>
+
+            <div class="builder-tabs">
+                <button class="builder-tab active" data-pane="hw">本体設計 (Firmware)</button>
+                <button class="builder-tab" data-pane="layout">レイアウト (Layout)</button>
+            </div>
+            
+            <!-- HW Config Tab -->
+            <div id="pane-hw" class="tab-pane">
+                <div id="matrixWarning" class="hidden" style="color:var(--danger-color); background:rgba(255,51,102,0.1); padding:12px; border-radius:8px; border:1px solid var(--danger-color); font-weight:600; margin-bottom:16px;">
+                    ⚠️ レイアウトエディタで配置されたRow/Colの最大値と、Hardware Matrixの行・列設定が一致していません。
+                </div>
+                <div class="builder-panels">
+                    <div class="builder-column">
+                        <h2>USB Device Info</h2>
+                        <div class="form-group row">
+                            <div>
+                                <label>Keyboard Name</label>
+                                <input type="text" id="devName" class="modern-input" placeholder="My Keyboard">
+                            </div>
+                        </div>
+                        <div class="form-group row">
+                            <div>
+                                <label>Vendor ID (VID)</label>
+                                <input type="text" id="devVid" class="modern-input" placeholder="0x1209">
+                            </div>
+                            <div>
+                                <label>Product ID (PID)</label>
+                                <input type="text" id="devPid" class="modern-input" placeholder="0xb803">
+                            </div>
+                        </div>
+
+                        <h2>Matrix Settings</h2>
+                        <div class="form-group row">
+                            <div>
+                                <label>Rows (行)</label>
+                                <input type="number" id="devRows" class="modern-input" value="4" min="1" max="16">
+                            </div>
+                            <div>
+                                <label>Columns (列)</label>
+                                <input type="number" id="devCols" class="modern-input" value="6" min="1" max="16">
+                            </div>
+                        </div>
+                        
+                        <div id="matrixPinsContainer" class="pins-container">
+                            <!-- JSで動的生成 -->
+                        </div>
+                    </div>
+
+                    <div class="builder-column">
+                        <h2>Features & Peripherals</h2>
+                        <p class="subtitle" style="font-size: 0.85rem;">※修飾キー（Ctrl等）の同時押し設定は、全工程完了後の「フェーズ5」へ移動しました。</p>
+                        <div class="feature-card">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="enableRGB"> RGB LED
+                            </label>
+                            <div id="rgbConfig" class="feature-config hidden">
+                                <label>Data Pin (DIN)</label>
+                                <select id="pinRgbDin" class="modern-select pin-select"></select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="build-section">
+                    <button id="btnBuildFirmware" class="glow-btn build-btn">🛠️ Build Firmware</button>
+                    <a id="btnDownloadFw" class="glow-btn build-btn hidden" style="text-decoration:none; margin-left:16px; display:none;">↓ Download Firmware</a>
+                    <div class="build-log-container">
+                        <pre id="buildLog">準備完了...</pre>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Layout Tab -->
+            <div id="pane-layout" class="tab-pane hidden">
+                <div class="editor-toolbar" style="display:flex; flex-wrap:wrap; align-items:center; gap:16px;">
+                    <button id="btnAddKey" class="glow-btn">➕ Add Key</button>
+                    <button id="btnDownloadJson" class="glow-btn">↓ Download Def. JSON</button>
+                    <div style="display:inline-flex; align-items:center;">
+                        <label for="uploadJson" class="glow-btn" style="cursor: pointer; display: inline-block;">↑ Upload Def. JSON</label>
+                        <input type="file" id="uploadJson" accept=".json" style="display: none;">
+                    </div>
+                    <button id="btnDeleteKey" class="danger-btn" disabled>🗑 Delete Selected</button>
+                    <div class="matrix-check-toggles" style="display:flex; gap:16px; background:rgba(0,0,0,0.3); padding:8px 16px; border-radius:8px;">
+                        <label class="checkbox-label" style="margin:0;"><input type="checkbox" id="checkMatrixRow"> Show Row Line</label>
+                        <label class="checkbox-label" style="margin:0;"><input type="checkbox" id="checkMatrixCol"> Show Col Line</label>
+                    </div>
+                </div>
+                
+                <div class="layout-canvas-container" id="layoutCanvasContainer">
+                    <div id="layoutCanvas" class="layout-canvas">
+                        <svg id="matrixSvgLayer" style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:1; overflow:visible;"></svg>
+                    </div>
+                    <div id="shortcutHelpIcon" class="floating-help" title="ショートカット">?</div>
+                </div>
+
+                <div class="properties-board" id="keyPropsPanel">
+                    <div class="props-header">Key Properties</div>
+                    <div class="props-grid">
+                        <div class="prop-section">
+                            <h3>Size & Position</h3>
+                            <div class="prop-group"><label>Width:</label><input type="number" id="propW" step="0.25" disabled></div>
+                            <div class="prop-group"><label>Height:</label><input type="number" id="propH" step="0.25" disabled></div>
+                            <div class="prop-group"><label>X:</label><input type="number" id="propX" step="0.25" disabled></div>
+                            <div class="prop-group"><label>Y:</label><input type="number" id="propY" step="0.25" disabled></div>
+                        </div>
+                        <div class="prop-section">
+                            <h3>Rotation</h3>
+                            <div class="prop-group"><label>Angle(deg):</label><input type="number" id="propR" step="15" disabled></div>
+                            <div class="prop-group"><label>Origin X:</label><input type="number" id="propRx" step="0.25" disabled></div>
+                            <div class="prop-group"><label>Origin Y:</label><input type="number" id="propRy" step="0.25" disabled></div>
+                        </div>
+                        <div class="prop-section">
+                            <h3>Hardware Matrix</h3>
+                            <div class="prop-group"><label>Matrix Row:</label><input type="number" id="propRow" min="0" disabled></div>
+                            <div class="prop-group"><label>Matrix Col:</label><input type="number" id="propCol" min="0" disabled></div>
+                            <div class="prop-group"></div>
+                        </div>
+                        <div class="prop-section" style="border-left:1px solid var(--glass-border); padding-left:24px;">
+                            <h3>Key Label</h3>
+                            <div class="prop-group" style="flex-direction:column; align-items:flex-start; gap:8px;">
+                                <label>Keycode:</label>
+                                <select id="propLabel" class="modern-select" style="padding:8px;" disabled>
+                                    <option value="">未設定</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- =============== 設定 (Settings) =============== -->
+        <div id="view-settings" class="app-view hidden glass-container">
+            <header>
+                <h1 class="glow-text">Settings</h1>
+                <p class="subtitle">アプリケーションの各種設定</p>
+            </header>
+            <div class="settings-content">
+                <div class="setting-item">
+                    <label>テーマカラー</label>
+                    <select class="modern-select">
+                        <option>Emerald Glow</option>
+                        <option>Ocean Blue</option>
+                        <option>Cyber Pink</option>
+                    </select>
+                </div>
+                <div class="setting-item">
+                    <label>言語</label>
+                    <select class="modern-select">
+                        <option>日本語</option>
+                        <option>English</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- =============== リンク集 (Links) =============== -->
+        <div id="view-links" class="app-view hidden glass-container">
+            <header>
+                <h1 class="glow-text">Links</h1>
+                <p class="subtitle">関連リソース</p>
+            </header>
+            <div class="links-content">
+                <div class="link-card">
+                    <div class="link-icon">🐙</div>
+                    <div class="link-info">
+                        <h3>GitHub</h3>
+                        <a href="#" target="_blank">UIAPduino_VIA Repository</a>
+                    </div>
+                </div>
+                <div class="link-card">
+                    <div class="link-icon">📖</div>
+                    <div class="link-info">
+                        <h3>Documentation</h3>
+                        <a href="#" target="_blank">プロジェクトドキュメント</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- モーダル: キーアサイン変更 -->
+    <div id="keyBindModal" class="modal hidden">
+        <div class="modal-content glass-panel">
+            <div class="modal-header">
+                <h2>キーのアサイン</h2>
+                <button class="close-btn" id="modalClose">×</button>
+            </div>
+            <div class="modal-body">
+                <p>割り当てたい役割を選んでください</p>
+                <select id="keycodeSelect" class="modern-select">
+                    <!-- JSで動的に追加 -->
+                </select>
+            </div>
+            <div class="modal-footer">
+                <button id="btnApplyKey" class="glow-btn">適用する</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Layout Editor Help Modal -->
+    <div id="flasherToKeymapModal" class="modal hidden">
+        <div class="modal-content glass-panel" style="max-width: 400px; text-align: center;">
+            <div class="modal-header">
+                <h2>🎉 ファームウェア書き込み完了！</h2>
+            </div>
+            <div class="modal-body" style="font-size: 1rem; line-height: 1.6; padding: 24px;">
+                <p>デバイスが正常に再起動しました！</p>
+                <p>続いてキーのアサインを行うため、<br>「キーマッピング」画面へ移動しますか？</p>
+                
+                <div style="display: flex; justify-content: center; gap: 16px; margin-top: 24px;">
+                    <button id="btnStayOnFlasher" class="danger-btn">ここに残る</button>
+                    <button id="btnNavToKeymap" class="glow-btn">キーマッピングへ移動</button>
                 </div>
             </div>
         </div>
     </div>
+
+    <!-- Layout Editor Help Modal -->
+    <div id="layoutHelpModal" class="modal hidden">
+        <div class="modal-content glass-panel" style="max-width: 600px;">
+            <div class="modal-header">
+                <h2>Keyboard Shortcuts & Tips</h2>
+                <button class="close-btn" id="layoutHelpClose">×</button>
+            </div>
+            <div class="modal-body" style="font-size: 0.9rem; line-height: 1.6;">
+                <p><strong>Editor Keyboard Shortcuts:</strong></p>
+                <ul style="list-style: none; padding: 0;">
+                    <li><kbd>↑</kbd> <kbd>↓</kbd> <kbd>←</kbd> <kbd>→</kbd> : Move selected keys</li>
+                    <li><kbd>Shift</kbd> + <kbd>↑</kbd> <kbd>↓</kbd> <kbd>←</kbd> <kbd>→</kbd> : Resize selected keys</li>
+                    <li><kbd>Ins</kbd> / <kbd>I</kbd> : Add a new key</li>
+                    <li><kbd>Del</kbd> : Delete selected keys</li>
+                    <li><kbd>Esc</kbd> : Deselect all</li>
+                    <li><kbd>J</kbd> / <kbd>K</kbd> : Select prev / next key</li>
+                </ul>
+                <p><strong>Mouse Actions:</strong></p>
+                <ul style="list-style: none; padding: 0;">
+                    <li><strong>Drag Canvas</strong> : Rectangular multi-selection</li>
+                    <li><kbd>Ctrl</kbd> + <strong>Click Input</strong> : Toggle multi-selection</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+    
+    <footer class="app-footer">
+        <p>&copy; 2026 UIAPduino Project. All rights reserved.</p>
+    </footer>
 </body>
 </html>

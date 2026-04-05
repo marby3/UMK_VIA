@@ -5,16 +5,8 @@ uint16_t default_layer_state = 1;
 uint16_t active_layer_state = 1;
 uint16_t keycode_cache[MATRIX_ROWS][MATRIX_COLS];
 
-// 初期状態の簡単なキーマップ。後にPhase 4で起動時にFlashからロードされるようにします。
-uint16_t current_keymap[LAYERS][MATRIX_ROWS][MATRIX_COLS] = {
-    // Layer 0
-    {
-        { 0x04, 0x05, 0x06, 0x07, 0x08, 0x09 },
-        { 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F },
-        { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 },
-        { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 }
-    }
-};
+// 初期状態のキーマップ（0初期化）。今後はPhase5のWebHID通信等によりFlashからロード・保存されます。
+uint16_t current_keymap[LAYERS][MATRIX_ROWS][MATRIX_COLS] = {0};
 
 void keymap_init(void) {
     default_layer_state = 1;
