@@ -296,6 +296,30 @@
                         <p class="subtitle" style="font-size: 0.85rem;">※修飾キー（Ctrl等）の同時押し設定は、全工程完了後の「フェーズ5」へ移動しました。</p>
                         <div class="feature-card">
                             <label class="checkbox-label">
+                                <input type="checkbox" id="enableSplit"> Split Keyboard Mode
+                            </label>
+                            <div id="splitConfig" class="feature-config hidden" style="display:flex; flex-direction:column; gap:12px;">
+                                <div class="subtitle" style="font-size:0.85rem; margin-top:-8px;">左右の基板で同一ファームウェアを使用し、USB接続側が自動的にMasterとなります。</div>
+                                <div>
+                                    <label>Handedness Pin (左右判別ピン)</label>
+                                    <div class="subtitle" style="font-size:0.8rem; margin-bottom:4px;">※このピンをGNDに直結した基板が「左手側」となります。</div>
+                                    <select id="pinHandedness" class="modern-select pin-select"></select>
+                                </div>
+                                <div>
+                                    <label>Matrix Combination (結合方式)</label>
+                                    <select id="splitCombineMode" class="modern-select">
+                                        <option value="right_to_left_cols">列(Col)を拡張して繋ぐ</option>
+                                        <option value="bottom_to_top_rows">行(Row)を拡張して繋ぐ</option>
+                                    </select>
+                                </div>
+                                <div style="font-size:0.85rem; color:#888; background:rgba(255,255,255,0.05); padding:8px; border-radius:4px;">
+                                    <strong>通信ピン固定:</strong> <code>Tx: PD5</code> / <code>Rx: PD6</code> (USART1を使用)
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="feature-card">
+                            <label class="checkbox-label">
                                 <input type="checkbox" id="enableRGB"> RGB LED
                             </label>
                             <div id="rgbConfig" class="feature-config hidden">

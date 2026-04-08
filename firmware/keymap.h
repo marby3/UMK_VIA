@@ -11,14 +11,14 @@
 #define KC_TRNS 0xFFFF
 
 // 現在のキーマップを保持するRAM配置の多次元配列
-extern uint16_t current_keymap[LAYERS][MATRIX_ROWS][MATRIX_COLS];
+extern uint16_t current_keymap[LAYERS][LOGICAL_ROWS][LOGICAL_COLS];
 
 // レイヤー状態
 extern uint16_t default_layer_state; // `TO` 等で切り替わるベースレイヤー状態
 extern uint16_t active_layer_state;  // 現在アクティブな全レイヤー(ビットマスク)
 
 // キャッシュ
-extern uint16_t keycode_cache[MATRIX_ROWS][MATRIX_COLS];
+extern uint16_t keycode_cache[LOGICAL_ROWS][LOGICAL_COLS];
 
 // 初期化
 void keymap_init(void);

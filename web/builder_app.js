@@ -145,6 +145,17 @@ elEnableRGB.addEventListener('change', (e) => {
 });
 elPinRgbDin.replaceWith(createPinSelect('pinRgbDin'));
 
+const elEnableSplit = document.getElementById('enableSplit');
+const elSplitConfig = document.getElementById('splitConfig');
+const elPinHandedness = document.getElementById('pinHandedness');
+elPinHandedness.replaceWith(createPinSelect('pinHandedness'));
+const elSplitCombineMode = document.getElementById('splitCombineMode');
+
+elEnableSplit.addEventListener('change', (e) => {
+    if(e.target.checked) elSplitConfig.classList.remove('hidden');
+    else elSplitConfig.classList.add('hidden');
+});
+
 // Wiring Mode Toggle Logic
 const radioWiringMode = document.querySelectorAll('input[name="wiringMode"]');
 const sectionMatrixMode = document.getElementById('sectionMatrixMode');
@@ -251,7 +262,12 @@ btnBuildFirmware.addEventListener('click', async () => {
         rows: wm === 'matrix' ? hwR : 1,
         cols: wm === 'matrix' ? hwC : directPinsList.length,
         row_pins: wm === 'matrix' ? rowPins : [],
-        col_pins: wm === 'matrix' ? colPins : directPinsList
+        col_pins: wm === 'matrix' ? colPins : directPinsList,
+        split: {
+            enabled: elEnableSplit.checked,
+            handedness_pin: document.getElementById('pinHandedness').value,
+            combine_mode: elSplitCombineMode.value
+        }
     };
 
     try {
@@ -687,12 +703,19 @@ function generateKeyboardDefinition() {
             cols: parseInt(elDevCols.value) || 6
         };
     }
+    
+    let splitConfig = {
+        enabled: elEnableSplit.checked,
+        handedness_pin: document.getElementById('pinHandedness').value,
+        combine_mode: elSplitCombineMode.value
+    };
 
     return {
         name: elDevName.value || "UIAPduino Custom Keyboard",
         vendorId: elDevVid.value || "0x1209",
         productId: elDevPid.value || "0xb803",
         matrix: matrixConfig,
+        split: splitConfig,
         layouts: {
             keymap: keymapArray
         }
@@ -735,6 +758,16 @@ function parseKeyboardDefinition(def) {
         
         renderDirectPinsUI();
         updateMatrixPinsUI();
+    }
+    
+    if(def.split) {
+        elEnableSplit.checked = !!def.split.enabled;
+        elEnableSplit.dispatchEvent(new Event('change'));
+        if (def.split.handedness_pin) document.getElementById('pinHandedness').value = def.split.handedness_pin;
+        if (def.split.combine_mode) elSplitCombineMode.value = def.split.combine_mode;
+    } else {
+        elEnableSplit.checked = false;
+        elEnableSplit.dispatchEvent(new Event('change'));
     }
     
     let keymap = def.layouts && def.layouts.keymap ? def.layouts.keymap : def;

@@ -57,7 +57,20 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 vid = config.get('vid', '0x1209').strip() or '0x1209'
                 pid = config.get('pid', '0xb803').strip() or '0xb803'
                 f.write(f'#define CUSTOM_VID {vid}\n')
-                f.write(f'#define CUSTOM_PID {pid}\n')
+                f.write(f'#define CUSTOM_PID {pid}\n\n')
+                
+                # Split Options
+                split = config.get('split', {})
+                if split.get('enabled'):
+                    f.write('#define CUSTOM_SPLIT_ENABLE 1\n')
+                    handedness_pin = clean_pin(split.get('handedness_pin', 'PC3'))
+                    f.write(f'#define CUSTOM_HANDEDNESS_PIN {handedness_pin}\n')
+                    combine_mode = split.get('combine_mode', 'right_to_left_cols')
+                    if combine_mode == 'right_to_left_cols':
+                        f.write('#define CUSTOM_SPLIT_COMBINE_COLS 1\n')
+                    else:
+                        f.write('#define CUSTOM_SPLIT_COMBINE_ROWS 1\n')
+                    f.write('\n')
                 
                 name = config.get('name', 'UIAPduino_VIA').strip() or 'UIAPduino_VIA'
                 f.write(f'#define STR_MANUFACTURER u"UIAPduino"\n')

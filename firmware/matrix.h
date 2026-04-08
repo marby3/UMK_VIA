@@ -19,6 +19,23 @@
 #define MATRIX_COLS CUSTOM_MATRIX_COLS
 #endif
 
+// 論理マトリクス（分割キーボード結合後）のサイズ定義
+#ifdef CUSTOM_SPLIT_ENABLE
+    #ifdef CUSTOM_SPLIT_COMBINE_COLS
+        #define LOGICAL_ROWS MATRIX_ROWS
+        #define LOGICAL_COLS (MATRIX_COLS * 2)
+    #elif defined(CUSTOM_SPLIT_COMBINE_ROWS)
+        #define LOGICAL_ROWS (MATRIX_ROWS * 2)
+        #define LOGICAL_COLS MATRIX_COLS
+    #else
+        #define LOGICAL_ROWS MATRIX_ROWS
+        #define LOGICAL_COLS MATRIX_COLS
+    #endif
+#else
+    #define LOGICAL_ROWS MATRIX_ROWS
+    #define LOGICAL_COLS MATRIX_COLS
+#endif
+
 // Initialize the matrix GPIO pins
 void matrix_init(void);
 
