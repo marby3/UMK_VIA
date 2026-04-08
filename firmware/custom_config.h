@@ -5,10 +5,10 @@
 #define CUSTOM_MATRIX_ROWS 2
 #define CUSTOM_MATRIX_COLS 3
 #define CUSTOM_ROW_PINS { PC0, PC1 }
-#define CUSTOM_COL_PINS { PC4, PC5, PC6 }
+#define CUSTOM_COL_PINS { PC5, PC6, PC7 }
 #define CUSTOM_VID 0x1209
 #define CUSTOM_PID 0xb803
 #define STR_MANUFACTURER u"UIAPduino"
-#define STR_PRODUCT u"test"
+#define STR_PRODUCT u"UIAPduino_VIA"
 
 #endif

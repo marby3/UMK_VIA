@@ -36,20 +36,23 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 f.write(f'#define CUSTOM_MATRIX_ROWS {config.get("rows", 4)}\n')
                 f.write(f'#define CUSTOM_MATRIX_COLS {config.get("cols", 6)}\n')
                 
-                row_pins = config.get('row_pins', ['PC0', 'PC1', 'PC2', 'PC3'])
-                col_pins = config.get('col_pins', ['PC4', 'PC5', 'PC6', 'PC7', 'PD0', 'PD2'])
-                
-                # Check for empty "未割当" which might be empty string. Replace with 0 or valid dummy if needed,
-                # but valid firmware needs actual pin constants from funconfig.h like PC4
-                # We'll just write them directly.
+                # Check for empty pin
                 def clean_pin(p):
                     return p if p else "0"
                 
-                row_pins_str = ", ".join([clean_pin(p) for p in row_pins])
-                col_pins_str = ", ".join([clean_pin(p) for p in col_pins])
-                
-                f.write(f'#define CUSTOM_ROW_PINS {{ {row_pins_str} }}\n')
-                f.write(f'#define CUSTOM_COL_PINS {{ {col_pins_str} }}\n')
+                wiring = config.get('wiring', 'matrix')
+                if wiring == 'direct':
+                    f.write('#define CUSTOM_DIRECT_PIN_MODE\n\n')
+                    direct_pins = config.get('col_pins', [])
+                    dp_pins_str = ", ".join([clean_pin(p) for p in direct_pins])
+                    f.write(f'#define CUSTOM_COL_PINS {{ {dp_pins_str} }}\n\n')
+                else:
+                    row_pins = config.get('row_pins', ['PC0', 'PC1', 'PC2', 'PC3'])
+                    col_pins = config.get('col_pins', ['PC4', 'PC5', 'PC6', 'PC7', 'PD0', 'PD2'])
+                    row_pins_str = ", ".join([clean_pin(p) for p in row_pins])
+                    col_pins_str = ", ".join([clean_pin(p) for p in col_pins])
+                    f.write(f'#define CUSTOM_ROW_PINS {{ {row_pins_str} }}\n')
+                    f.write(f'#define CUSTOM_COL_PINS {{ {col_pins_str} }}\n\n')
                 
                 vid = config.get('vid', '0x1209').strip() or '0x1209'
                 pid = config.get('pid', '0xb803').strip() or '0xb803'

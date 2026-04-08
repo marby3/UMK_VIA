@@ -144,7 +144,69 @@ elEnableRGB.addEventListener('change', (e) => {
     else elRgbConfig.classList.add('hidden');
 });
 elPinRgbDin.replaceWith(createPinSelect('pinRgbDin'));
+
+// Wiring Mode Toggle Logic
+const radioWiringMode = document.querySelectorAll('input[name="wiringMode"]');
+const sectionMatrixMode = document.getElementById('sectionMatrixMode');
+const sectionDirectMode = document.getElementById('sectionDirectMode');
+function getWiringMode() {
+    const checked = Array.from(radioWiringMode).find(r => r.checked);
+    return checked ? checked.value : 'matrix';
+}
+radioWiringMode.forEach(r => r.addEventListener('change', () => {
+    if (r.value === 'direct') {
+        sectionMatrixMode.classList.add('hidden');
+        sectionDirectMode.classList.remove('hidden');
+    } else {
+        sectionMatrixMode.classList.remove('hidden');
+        sectionDirectMode.classList.add('hidden');
+    }
+    checkMatrixConsistency();
+}));
+// 初期状態の反映
+document.querySelector('input[name="wiringMode"]:checked')?.dispatchEvent(new Event('change'));
+
 updateMatrixPinsUI();
+
+// Direct Pins Logic
+let directPinsList = [];
+const directPinsContainer = document.getElementById('directPinsContainer');
+const btnAddDirectPin = document.getElementById('btnAddDirectPin');
+
+function renderDirectPinsUI() {
+    directPinsContainer.innerHTML = '';
+    directPinsList.forEach((dp, index) => {
+        const dpDiv = document.createElement('div');
+        dpDiv.className = 'pin-row';
+        dpDiv.style.background = 'rgba(255,255,255,0.05)';
+        dpDiv.style.padding = '8px';
+        dpDiv.style.borderRadius = '4px';
+
+        const selPin = createPinSelect(`dp_pin_${index}`);
+        if(dp) selPin.value = dp;
+        selPin.onchange = (e) => { directPinsList[index] = e.target.value; };
+
+        const btnRemove = document.createElement('button');
+        btnRemove.className = 'danger-btn';
+        btnRemove.style.padding = '4px 8px';
+        btnRemove.textContent = '✖';
+        btnRemove.onclick = () => {
+            directPinsList.splice(index, 1);
+            renderDirectPinsUI();
+        };
+
+        dpDiv.innerHTML = `<span class="pin-label" style="width: 50px;">Pin ${index}</span>`;
+        dpDiv.appendChild(selPin);
+        dpDiv.appendChild(btnRemove);
+        directPinsContainer.appendChild(dpDiv);
+    });
+}
+if(btnAddDirectPin) {
+    btnAddDirectPin.addEventListener('click', () => {
+        directPinsList.push('');
+        renderDirectPinsUI();
+    });
+}
 
 function appendLog(str) {
     buildLog.textContent += '\n' + str;
@@ -166,25 +228,30 @@ btnBuildFirmware.addEventListener('click', async () => {
     btnDownloadFw.classList.add('hidden');
     
     // Gather Pin Configurations
+    const wm = getWiringMode();
     const rowPins = [];
-    for (let r = 0; r < hwR; r++) {
-        const sel = document.getElementById(`pin_row_${r}`);
-        rowPins.push(sel ? sel.value : "");
-    }
     const colPins = [];
-    for (let c = 0; c < hwC; c++) {
-        const sel = document.getElementById(`pin_col_${c}`);
-        colPins.push(sel ? sel.value : "");
+    
+    if (wm === 'matrix') {
+        for (let r = 0; r < hwR; r++) {
+            const sel = document.getElementById(`pin_row_${r}`);
+            rowPins.push(sel ? sel.value : "");
+        }
+        for (let c = 0; c < hwC; c++) {
+            const sel = document.getElementById(`pin_col_${c}`);
+            colPins.push(sel ? sel.value : "");
+        }
     }
     
     const requestData = {
-        name: elDevName.value,
-        vid: elDevVid.value,
-        pid: elDevPid.value,
-        rows: hwR,
-        cols: hwC,
-        row_pins: rowPins,
-        col_pins: colPins
+        name: elDevName.value || 'UIAPduino_VIA',
+        vid: elDevVid.value || '0x1209',
+        pid: elDevPid.value || '0xb803',
+        wiring: wm,
+        rows: wm === 'matrix' ? hwR : 1,
+        cols: wm === 'matrix' ? hwC : directPinsList.length,
+        row_pins: wm === 'matrix' ? rowPins : [],
+        col_pins: wm === 'matrix' ? colPins : directPinsList
     };
 
     try {
@@ -590,8 +657,14 @@ function generateKeyboardDefinition() {
             if (k.rx) props.rx = k.rx;
             if (k.ry) props.ry = k.ry;
             
-            props.row = k.row || 0;
-            props.col = k.col || 0;
+            const wm = getWiringMode();
+            if (wm === 'direct') {
+                props.row = 0;
+                props.col = idx;
+            } else {
+                props.row = k.row || 0;
+                props.col = k.col || 0;
+            }
 
             if (Object.keys(props).length > 0) {
                 rowArray.push(props);
@@ -603,14 +676,23 @@ function generateKeyboardDefinition() {
         curY++;
     });
 
+    let matrixConfig = {};
+    const wm = getWiringMode();
+    if (wm === 'direct') {
+        matrixConfig = { wiring: 'direct', pins: directPinsList };
+    } else {
+        matrixConfig = {
+            wiring: 'matrix',
+            rows: parseInt(elDevRows.value) || 4,
+            cols: parseInt(elDevCols.value) || 6
+        };
+    }
+
     return {
         name: elDevName.value || "UIAPduino Custom Keyboard",
         vendorId: elDevVid.value || "0x1209",
         productId: elDevPid.value || "0xb803",
-        matrix: {
-            rows: parseInt(elDevRows.value) || 4,
-            cols: parseInt(elDevCols.value) || 6
-        },
+        matrix: matrixConfig,
         layouts: {
             keymap: keymapArray
         }
@@ -633,8 +715,25 @@ function parseKeyboardDefinition(def) {
     if(def.vendorId) elDevVid.value = def.vendorId;
     if(def.productId) elDevPid.value = def.productId;
     if(def.matrix) {
-        elDevRows.value = def.matrix.rows || 4;
-        elDevCols.value = def.matrix.cols || 6;
+        if (def.matrix.wiring === 'direct') {
+            document.querySelector('input[name="wiringMode"][value="direct"]').checked = true;
+            directPinsList = def.matrix.pins || [];
+        } else {
+            document.querySelector('input[name="wiringMode"][value="matrix"]').checked = true;
+            elDevRows.value = def.matrix.rows || 4;
+            elDevCols.value = def.matrix.cols || 6;
+            // Legacy format fallback
+            if(def.matrix.direct_pins && Array.isArray(def.matrix.direct_pins)) {
+                directPinsList = def.matrix.direct_pins.map(d => d.pin || d);
+            } else {
+                directPinsList = [];
+            }
+        }
+        
+        // Dispatch change event to trigger section visibility toggle
+        document.querySelector('input[name="wiringMode"]:checked').dispatchEvent(new Event('change'));
+        
+        renderDirectPinsUI();
         updateMatrixPinsUI();
     }
     
