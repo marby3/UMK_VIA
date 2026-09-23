@@ -4,8 +4,39 @@ CH32V003 (RISC-V / Flash 16KB / RAM 2KB) 上で動作する自作キーボード
 ファームウェアです。キーマップ編集は VIA プロトコル経由で
 [Remap](https://remap-keys.app) に委任します。
 
-本リポジトリに現在含まれるのは **仕様書 §3 の `firmware/` `keyboards/` と
-§4.9 のビルドシステム** です。`web/` と `build_server.py` (仕様書 §5) は未着手です。
+設計の根拠はすべて [仕様書 (`docs/specification.md`)](docs/specification.md) にあります。
+本文中の「仕様書 §N」はこの文書の節番号です。開発ルール (ブランチ運用・バージョン規則) は
+[CONTRIBUTING.md](CONTRIBUTING.md) を参照してください。
+
+---
+
+## 開発状況
+
+2026-09-23 時点。ファームウェアとビルドシステムは書き終えていてビルドも通りますが、
+**実機ではまだ一度も動かしていません**。Web UI と `build_server.py` は未着手です。
+まだリリース (バージョン番号) はありません。
+
+仕様書 §7「実装対象」の各項目:
+
+| 項目 | 実装 | 実機確認 |
+| --- | --- | --- |
+| マトリクス / ダイレクトピン | 実装済み | 未確認 |
+| レイヤー (`MO` / `TO` / `TG` / `DF`) | 実装済み | 未確認 |
+| Mod-Tap / Layer-Tap | 実装済み | 未確認 |
+| VIA 連携 (プロトコル `0x000C`) | 実装済み | 未確認 |
+| Flash 永続化 | 実装済み | 未確認 |
+| Split | 実装済み | 未確認 |
+| RGB (4 モード) | 実装済み | 未確認 |
+| `umk` CLI | 実装済み | `compile` / `clean` / `list` は PC 上で確認済み、`flash` は未確認 |
+| Web UI: ヘッダーナビゲーション | 未着手 | — |
+| Web UI: Hardware Builder | 未着手 | — |
+| Web UI: Layout Editor (KeyboardDefinition 入出力) | 未着手 | — |
+| Web UI: ローカルビルド API 連携 (`build_server.py`) | 未着手 | — |
+| Web UI: Web Flasher | 未着手 | — |
+| Web UI: Key Tester (104 / 109 + カスタムレイアウト) | 未着手 | — |
+
+次の一歩は、下の §1 の手順を実機の uiapduino で最後まで通すことです。通れば
+`v0.1.0` を付けます (条件は CONTRIBUTING.md のバージョン規則)。
 
 ---
 
@@ -137,31 +168,49 @@ python tools/via_probe.py --keyboard uiapduino --write
 
 ## 2. ディレクトリ構成
 
-```
+```text
+docs/
+  specification.md         仕様書 (唯一の設計文書)
 firmware/
   Makefile
   funconfig.h              ch32fun/rv003usb 向けビルド設定 (両者が名前で探すので直下)
-  core/                    キーボード論理。ペリフェラルを直接触らない
+  core/                    キーボード論理
     board_config.h         CUSTOM_* → MATRIX_*/LOGICAL_*、matrix_row_t、timer_ms
     main.c                 起動シーケンスと 1ms メインループ
     keymap.c/.h            キーコード評価・レイヤー・Tap/Hold
     via.c/.h               VIA プロトコル
     flash_store.c/.h       内蔵 Flash への永続化
-  drivers/                 ペリフェラルを触る層
+  drivers/                 GPIO / USART / SPI / DMA を触る層
     matrix.c/.h            GPIO スキャン
     usb_config.c/.h        USB ディスクリプタと rv003usb コールバック
     split.c/.h             USART1 + DMA
     rgb_led.c/.h           SPI + DMA (WS2812B)
   lib/                     vendored (編集しない)
     ch32v003fun/  rv003usb/
-keyboards/<name>/          キーボード固有設定
-tools/                     umk CLI / flash_guard / via_probe
+keyboards/uiapduino/       キーボード固有設定 (構成は §4)
+  config.h  rules.mk  uiapduino.remap.json
+  keymaps/default/keymap.c 既定キーマップ
+  keymaps/gaming/keymap.c  追加キーマップの例 (-km gaming)
+tools/
+  umk.py                   umk CLI 本体
+  flash_guard.py           リンク後の Flash 残量チェック
+  stamp.py                 build/ がどのキーボード/キーマップのものかを記録
+  via_probe.py             VIA 疎通確認
+umk  umk.cmd               umk.py のラッパー (POSIX / Windows)
 build/                     生成物すべて (gitignore)
 ```
 
-依存の向きは **core → drivers → lib** の一方向です。`board_config.h` が
-core 側にあるのは、キーマップのサイズを知るためだけに core がドライバの
-ヘッダを include しなくて済むようにするためです。
+core はキーボード論理で、GPIO・USART・SPI・DMA には drivers 経由でしか触れません。
+ただし例外が 2 つあります。`flash_store.c` は Flash コントローラを、`main.c` は
+SysTick を直接操作します。
+
+依存は **core → drivers → lib** が基本ですが、drivers から core への参照も 2 種類あります。
+
+- `matrix.h` / `rgb_led.h` が `core/board_config.h` を include して、マトリクスの寸法
+  (`MATRIX_*` / `LOGICAL_*`) を読む。`board_config.h` を core 側に置いているのは、
+  キーマップのサイズを知るために core がドライバのヘッダを include しなくて済むようにするため
+- `usb_config.c` が `core/via.h` を include して、USB 割り込みから
+  `via_receive_packet()` / `via_handle_in()` を呼ぶ
 
 ---
 
@@ -188,8 +237,8 @@ python tools/umk.py clean -kb uiapduino  # build/ を削除
 予約されていません。`.text` がここまで伸びると最初の保存でファームウェア本体が
 壊れるため、リンク後に `tools/flash_guard.py` が毎回検証してビルドを止めます。
 
-```
-Flash: 5796 / 16128 bytes used (256 B reserved for the keymap store at 0x08003F00)
+```text
+Flash: 5856 / 16128 bytes used (256 B reserved for the keymap store at 0x08003F00)
 ```
 
 RAM 超過は `current_keymap` が `.bss` に載るためリンカが検出します
@@ -249,9 +298,19 @@ Web UI 側の RGB ピン選択肢も PC6 のみに絞ってください。
 ロータリーエンコーダ (VIA `0x14`/`0x15` は `id_unhandled`)、マクロ /
 One Shot / Tap Dance / Unicode、圧電スピーカー、ディスプレイ。
 
-`uiapduino` (4x6、Split/RGB なし) の実測は **Flash 5796 B / 16 KB、RAM 512 B / 2 KB**
-なので、後回し項目に充てる余地はあります。Split + RGB + 8 レイヤー 8x16 論理まで
-積むと RAM 1720 B / 2 KB まで上がり、スタックの余裕がほぼ無くなります。
+リソースの実測値 (2026-09-23、クリーンビルド時のリンカ出力):
+
+| 構成 | Flash | RAM |
+| --- | --- | --- |
+| `uiapduino` 既定 (4x6、4 レイヤー、Split/RGB なし) | 5856 B / 16 KB | 512 B / 2 KB |
+| Split + RGB 32 LED + 8 レイヤー + 論理 4x16 (片手 4x8) | 8588 B / 16 KB | 1732 B / 2 KB |
+| Split + RGB 32 LED + 8 レイヤー + 論理 8x16 (片手 8x8) | — | **収まらない** (2964 B 必要、リンクエラー) |
+
+既定構成なら、スコープ外の項目に回せる余地があります。論理 4x16・8 レイヤーまで
+積むと RAM は 1732 B になり、スタックの余裕はほとんど残りません。論理 8x16・8 レイヤーは
+キーマップだけで 8 × 128 × 2 = 2048 B となり、RAM の全量を超えます。キーマップ保存領域も
+Flash 末尾から確保されるので、レイヤーやキー数を増やすと使えるプログラム領域が減ります
+(論理 4x16・8 レイヤーで 1088 B を予約)。
 
 ---
 
@@ -260,5 +319,3 @@ One Shot / Tap Dance / Unicode、圧電スピーカー、ディスプレイ。
 `firmware/lib/ch32v003fun/` ([cnlohr/ch32fun](https://github.com/cnlohr/ch32fun)) と
 `firmware/lib/rv003usb/` ([cnlohr/rv003usb](https://github.com/cnlohr/rv003usb)) は
 vendored です。原則編集しません。
-
-テスト
