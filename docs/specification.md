@@ -296,7 +296,8 @@ make -C firmware KEYBOARD=<name> KEYMAP=<keymap> clean
 - `keyboards/$(KEYBOARD)/keymaps/$(KEYMAP)/keymap.c` が存在すれば `ADDITIONAL_C_FILES` に追加
   (`default_keymap` の `weak` オーバーライド)。存在しない場合はコア側の空 `weak` 定義のままビルドする。
 - コアの `.c` ファイル一覧 (`rv003usb.S`, `rv003usb.c`, `usb_config.c`, `matrix.c`, `split.c`, `rgb_led.c`,
-  `keymap.c`, `flash_store.c`, `via.c`) は固定でリンクする。
+  `keymap.c`, `flash_store.c`, `via.c`) は固定でリンクする。エントリの `core/main.c` はこの一覧に
+  含めず、Makefile が生成する `build/main.c` (1 行の `#include`) 経由でコンパイルする。
 
 #### 4.9.2 umk CLI
 
@@ -334,7 +335,7 @@ Web UI の Hardware Builder は複数キーマップの概念を持たない (�
 1. **Hardware / Keyboard Builder** — ピン配置・マトリクス/ダイレクトピン・Split・RGB・VID/PID などの
    ハードウェア定義と、視覚的なキー配置 (Layout Editor) を GUI で作成し、ファームウェアと
    Remap 用キーボード定義 JSON の両方を生成する。
-2. **Web Flasher** — WebUSB で CH32V003 純正ブートローダーに直接书き込む (ドライバ不要)。
+2. **Web Flasher** — WebUSB で CH32V003 純正ブートローダーに直接書き込む (ドライバ不要)。
 3. **Key Tester** — 完成したキーボードの打鍵動作を視覚的に確認する (WebHID 不要、標準の
    `keydown`/`keyup` イベントで動作するため市販キーボードのテストにも使える)。
 4. キーマップの実際の編集・書き込みは **Remap (remap-keys.app) へ誘導する** (VID/PID とキーボード

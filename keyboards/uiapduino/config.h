@@ -54,7 +54,7 @@
 
 /* --- RGB ---------------------------------------------------------------- */
 /* CUSTOM_RGB_PIN must be PC6: the DMA+SPI WS2812B driver only drives SPI1
- * MOSI. See firmware/rgb_led.c. */
+ * MOSI. See firmware/drivers/rgb_led.c. */
 /* #define CUSTOM_RGB_ENABLE */
 /* #define CUSTOM_RGB_PIN      PC6 */
 /* #define CUSTOM_RGB_NUM_LEDS 8 */
