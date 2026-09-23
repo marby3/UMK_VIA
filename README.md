@@ -27,7 +27,7 @@ CH32V003 (RISC-V / Flash 16KB / RAM 2KB) 上で動作する自作キーボード
 | Flash 永続化 | 実装済み | 未確認 |
 | Split | 実装済み | 未確認 |
 | RGB (4 モード) | 実装済み | 未確認 |
-| `umk` CLI | 実装済み | `compile` / `clean` / `list` は PC 上で確認済み、`flash` は未確認 |
+| `umk` CLI | 実装済み | 未確認 (`flash` 以外は実機不要で、PC 上で動作確認済み) |
 | Web UI: ヘッダーナビゲーション | 未着手 | — |
 | Web UI: Hardware Builder | 未着手 | — |
 | Web UI: Layout Editor (KeyboardDefinition 入出力) | 未着手 | — |
@@ -204,7 +204,8 @@ core はキーボード論理で、GPIO・USART・SPI・DMA には drivers 経�
 ただし例外が 2 つあります。`flash_store.c` は Flash コントローラを、`main.c` は
 SysTick を直接操作します。
 
-依存は **core → drivers → lib** が基本ですが、drivers から core への参照も 2 種類あります。
+依存は **core → drivers → lib** が基本ですが、drivers から core への参照が 2 種類
+(3 ファイル) あります。
 
 - `matrix.h` / `rgb_led.h` が `core/board_config.h` を include して、マトリクスの寸法
   (`MATRIX_*` / `LOGICAL_*`) を読む。`board_config.h` を core 側に置いているのは、

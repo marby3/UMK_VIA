@@ -37,8 +37,8 @@ UMK_VIA は、WCH **CH32V003** RISC-V マイコン上で動作する自作キー
 | 項目 | 内容 |
 | --- | --- |
 | マイコン | WCH **CH32V003** (RISC-V, Flash 16KB, RAM 2KB) |
-| コアフレームワーク | `ch32v003fun` (vendored submodule) |
-| USB 実装 | `rv003usb` (ソフトウェア USB, vendored submodule) |
+| コアフレームワーク | `ch32v003fun` (`firmware/lib/` に vendored) |
+| USB 実装 | `rv003usb` (ソフトウェア USB, `firmware/lib/` に vendored) |
 | USB 速度 | **Low-Speed** — 1 パケット最大 8 バイト、`bInterval` 下限 10ms (規格上の制約) |
 | ビルドツールチェイン | `riscv-none-elf-gcc` |
 | 永続化 | EEPROM 非搭載。内蔵 Flash の末尾ページを使用 |
@@ -53,16 +53,21 @@ QMK 風に「コアファームウェア」と「キーボード固有設定」�
 
 ```text
 firmware/                  コアファームウェア (キーボード非依存)
-  main.c                   メインループ・USB割り込みディスパッチ
-  usb_config.c/.h          USBディスクリプタ (EP0/EP1/EP2)
-  matrix.c/.h              マトリクス / ダイレクトピンスキャン
-  keymap.c/.h              QMK互換キーコード評価・レイヤー・Tap/Hold
-  via.c/.h                 VIAプロトコル実装
-  flash_store.c/.h         内蔵Flashへのキーマップ永続化
-  split.c/.h                分割キーボード (USART1)
-  rgb_led.c/.h             RGB LED (WS2812, DMA+SPI)
   Makefile                 KEYBOARD=<name> を受け取るビルドエントリ
-  ch32v003fun/, rv003usb/  vendored submodules (編集しない)
+  funconfig.h              ch32v003fun / rv003usb 向けビルド設定
+  core/                    キーボード論理
+    board_config.h         CUSTOM_* から MATRIX_* / LOGICAL_* を導出
+    main.c                 メインループ・USB割り込みディスパッチ
+    keymap.c/.h            QMK互換キーコード評価・レイヤー・Tap/Hold
+    via.c/.h               VIAプロトコル実装
+    flash_store.c/.h       内蔵Flashへのキーマップ永続化
+  drivers/                 ペリフェラル (GPIO / USART / SPI / DMA) を触る層
+    usb_config.c/.h        USBディスクリプタ (EP0/EP1/EP2)
+    matrix.c/.h            マトリクス / ダイレクトピンスキャン
+    split.c/.h             分割キーボード (USART1)
+    rgb_led.c/.h           RGB LED (WS2812, DMA+SPI)
+  lib/                     vendored (編集しない)
+    ch32v003fun/  rv003usb/
 
 keyboards/<name>/          キーボード固有設定 (複数キーボードを共存可能にする単位)
   config.h                 ピン/マトリクス/機能フラグ (CUSTOM_* マクロ)
@@ -72,7 +77,7 @@ keyboards/<name>/          キーボード固有設定 (複数キーボードを
     <keymap名>/keymap.c    任意追加のキーマップ (umk CLI の `-km` で選択)
   <name>.remap.json        Remap 登録用キーボード定義
 
-web/                        ブラウザ側コンフィグレータ (ビルド不要, Vanilla JS)
+web/                        ブラウザ側コンフィグレータ (ビルド不要, Vanilla JS) ※未着手
   index.html                 タブ切り替え型の単一ページ
   builder_app.js             Hardware Config + Layout Editor
   flasher_app.js              WebUSB ファームウェア書き込み
@@ -80,8 +85,11 @@ web/                        ブラウザ側コンフィグレータ (ビルド�
   protocol.js                (Flasher/Builder が VIA 経由でデバイス情報を読む用途にのみ縮小して残す)
   styles.css
 
-build_server.py             ローカル開発サーバー + /api/build, /api/remap-definition
+build_server.py             ローカル開発サーバー + /api/build, /api/remap-definition ※未着手
 ```
+
+`web/` と `build_server.py` は予定している配置で、まだ存在しません。実装の進み具合は
+README の「開発状況」を参照してください。
 
 `keyboards/<name>/config.h` と `<name>.remap.json` は `build_server.py` が Web UI からの
 JSON 設定を元に自動生成する成果物であり、手編集しても次回ビルドで上書きされる。
@@ -364,10 +372,10 @@ Web UI の Hardware Builder は複数キーマップの概念を持たない (�
 
 ### 5.5 build_server.py (ローカル開発 API)
 
-- `POST /api/build`: Hardware Config の JSON を受け取り、`matrix.h` の `LOGICAL_ROWS`/`LOGICAL_COLS`
+- `POST /api/build`: Hardware Config の JSON を受け取り、`core/board_config.h` の `LOGICAL_ROWS`/`LOGICAL_COLS`
   計算ロジックと同じ規則 (`logical_matrix_size()`) で論理マトリクスサイズを算出し、
   `keyboards/<name>/config.h` と `<name>.remap.json` を同時生成してからビルドする。
-  **`matrix.h` の論理サイズ計算ロジックを変更する場合は、この関数を必ず同期させる。**
+  **`core/board_config.h` の論理サイズ計算ロジックを変更する場合は、この関数を必ず同期させる。**
 - `POST /api/remap-definition`: ビルドを伴わない、定義 JSON のみの生成 (ダウンロード用)。
 - VID/PID は Remap のスキーマ (`^0x[0-9a-fA-F]{1,4}$`) に正規化してから出力する。
 
