@@ -35,8 +35,18 @@ CH32V003 (RISC-V / Flash 16KB / RAM 2KB) 上で動作する自作キーボード
 | Web UI: Web Flasher | 未着手 | — |
 | Web UI: Key Tester (104 / 109 + カスタムレイアウト) | 未着手 | — |
 
-次の一歩は、下の §1 の手順を実機の uiapduino で最後まで通すことです。通れば
+次の一歩は、下の §1 の手順を実機の `ch32v003_keyboard` で最後まで通すことです。通れば
 `v0.1.0` を付けます (条件は CONTRIBUTING.md のバージョン規則)。
+
+### キーボード定義
+
+| 定義 | 基板 | 備考 |
+| --- | --- | --- |
+| `keyboards/ch32v003_keyboard` | 自作の 6 キー (2 行 × 3 列)。UIAPduino Pro Micro CH32V003 V1.4 を搭載 | 実機確認に使う基板。LED (SK6812MINI-E × 6) は PD5 につながっていて、今の WS2812B ドライバ (PC6 固定) では**点灯しない** (§4 の RGB ピンを参照) |
+| `keyboards/uiapduino` | なし (4 × 6 のサンプル定義) | 全 `CUSTOM_*` の見本。対応する実物の基板はない |
+
+書き込み用の `.bin` と定義 JSON は、`dist/<キーボード名>-<コミット>/` にセットで置きます
+(git 管理外)。
 
 ---
 
@@ -76,15 +86,15 @@ rv003usb の要件:
 ユーザーコード起動まで約 5 秒待ちます ── か、ブートボタンを押しながら挿す)、
 
 ```bash
-python tools/umk.py flash -kb uiapduino
+python tools/umk.py flash -kb ch32v003_keyboard
 ```
 
 `minichlink` は USB ブートローダー (VID `0x1209` / PID `0xB003`) と WCH-LinkE の
 どちらも自動検出します。取り違える場合は明示できます。
 
 ```bash
-python tools/umk.py flash -kb uiapduino --programmer b003boot   # USB
-python tools/umk.py flash -kb uiapduino --programmer linke      # WCH-LinkE
+python tools/umk.py flash -kb ch32v003_keyboard --programmer b003boot   # USB
+python tools/umk.py flash -kb ch32v003_keyboard --programmer linke      # WCH-LinkE
 ```
 
 `minichlink.exe` はビルド済みのものが vendored されているので追加ビルドは不要です。
@@ -125,13 +135,13 @@ Remap は不正なレポートを受け取ると**黙って切断する**ため�
 
 ```bash
 pip install hidapi
-python tools/via_probe.py --keyboard uiapduino
+python tools/via_probe.py --keyboard ch32v003_keyboard
 ```
 
 キーマップ書き込みと即時 Flash 保存まで含めて試す場合 (元の値は書き戻します):
 
 ```bash
-python tools/via_probe.py --keyboard uiapduino --write
+python tools/via_probe.py --keyboard ch32v003_keyboard --write
 ```
 
 確認内容:
@@ -149,9 +159,11 @@ python tools/via_probe.py --keyboard uiapduino --write
 
 ### 1-5. Remap で開く
 
-1. `keyboards/uiapduino/uiapduino.remap.json` を Remap に登録する
+1. `keyboards/ch32v003_keyboard/ch32v003_keyboard.remap.json` を Remap に登録する
    (自分のアカウントでキーボード定義として登録するか、
-   ローカル起動した remap-keys/remap に読み込ませる)
+   ローカル起動した remap-keys/remap に読み込ませる)。登録時の製品名は
+   `config.h` の `STR_PRODUCT` (`CH32V003_keyboard`) と同じにする。VID/PID が
+   `uiapduino` と共通なので、Remap は製品名で定義を区別する
 2. 定義の `vendorId` / `productId` が `config.h` の `CUSTOM_VID` / `CUSTOM_PID`
    と一致していること
 3. 定義の `matrix.rows` / `matrix.cols` は **Split 結合後の論理サイズ**であること
@@ -187,10 +199,14 @@ firmware/
     rgb_led.c/.h           SPI + DMA (WS2812B)
   lib/                     vendored (編集しない)
     ch32v003fun/  rv003usb/
-keyboards/uiapduino/       キーボード固有設定 (構成は §4)
-  config.h  rules.mk  uiapduino.remap.json
-  keymaps/default/keymap.c 既定キーマップ
-  keymaps/gaming/keymap.c  追加キーマップの例 (-km gaming)
+keyboards/                 キーボード固有設定 (構成は §4)
+  ch32v003_keyboard/       実機確認に使う 6 キー基板
+    config.h  rules.mk  ch32v003_keyboard.remap.json
+    keymaps/default/keymap.c
+  uiapduino/               4x6 のサンプル定義
+    config.h  rules.mk  uiapduino.remap.json
+    keymaps/default/keymap.c 既定キーマップ
+    keymaps/gaming/keymap.c  追加キーマップの例 (-km gaming)
 tools/
   umk.py                   umk CLI 本体
   flash_guard.py           リンク後の Flash 残量チェック
@@ -198,6 +214,7 @@ tools/
   via_probe.py             VIA 疎通確認
 umk  umk.cmd               umk.py のラッパー (POSIX / Windows)
 build/                     生成物すべて (gitignore)
+dist/                      書き込み用 .bin と定義 JSON のセット (gitignore)
 ```
 
 core はキーボード論理で、GPIO・USART・SPI・DMA には drivers 経由でしか触れません。
@@ -270,6 +287,7 @@ keyboards/<name>/
 | PD7 | NRST (オプションバイトで解放しない限り) |
 
 標準構成でマトリクスに使えるのは PA1, PA2, PC0–PC5, PC7, PD0, PD2 です。
+RGB を使わないなら PC6 も使えます (`ch32v003_keyboard` は列に使っています)。
 
 ### RGB ピンについて (仕様書 §8 の未確定事項)
 
@@ -277,6 +295,10 @@ keyboards/<name>/
 SPI1 MOSI = **PC6 固定**です。`CUSTOM_RGB_PIN` は設定可能なままにしてありますが、
 PC6 以外を指定するとビルド時に `#error` になります (無音で光らない状態を避けるため)。
 Web UI 側の RGB ピン選択肢も PC6 のみに絞ってください。
+
+`ch32v003_keyboard` の LED はデータ線が PD5 なので、このドライバでは点灯しません。
+そのため RGB を無効にしてビルドしています。PD5 で光らせるには、任意のピンを駆動できる
+ドライバ (ソフトウェアのビット操作など) が必要で、これは §8 の決定と合わせて別の作業にします。
 
 ---
 
