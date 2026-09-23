@@ -4,18 +4,18 @@
 #include "rv003usb.h"
 #include "matrix.h"
 #include "split.h"
+#include "rgb_led.h"
 #include "keymap.h"
 #include "flash_store.h"
+#include "via.h"
 
 // 状態管理
 uint8_t local_matrix_state[MATRIX_ROWS][MATRIX_COLS] = {0};
 uint8_t global_matrix_state[LOGICAL_ROWS][LOGICAL_COLS] = {0};
 
-// キーボード用とカスタムHID用のレポートバッファ
+// キーボード用のレポートバッファ (EP2 の VIA レポートは via.c 側が保持)
 uint8_t current_keyboard_report[8] = { 0 };
-uint8_t current_custom_report[8] = { 0 };
 
-volatile uint8_t pending_flash_save = 0;
 volatile uint8_t usb_configured_flag = 0; // USB通信が確立したかどうかのフラグ
 
 int main()
@@ -24,16 +24,25 @@ int main()
 	Delay_Ms(1); // USB再認識用のディレイ
     
     // Phase 4: 起動時に保存されたキー配列があればRAMへロードする
+    // (保存が無い / 構成が変わっている場合は default_keymap で初期化されます)
     flash_store_load();
 
     // Phase 2: ピンの初期化
     matrix_init();
-    
+
     // Phase 6: キーコードキャッシュとレイヤー状態の初期化
     keymap_init();
-    
+
+    // VIA (Remap) プロトコル層の初期化
+    via_init();
+
     // Phase 1: USBセットアップ
 	usb_setup();
+
+#ifdef CUSTOM_RGB_ENABLE
+    // Phase 9: RGB LED
+    rgb_led_init();
+#endif
 
 #ifdef CUSTOM_SPLIT_ENABLE
     split_init();
@@ -69,10 +78,14 @@ int main()
         }
 #endif
 
-        if (pending_flash_save) {
-            flash_store_save_and_reboot();
-            pending_flash_save = 0; // 実際には再起動するのでここは到達しません
-        }
+        via_task(system_millis);
+
+        // VIA でキーマップが書き換えられていれば、通信が落ち着いた頃に自動保存する
+        flash_store_task(system_millis);
+
+#ifdef CUSTOM_RGB_ENABLE
+        rgb_led_task(system_millis);
+#endif
 
         // Phase 2: マトリックススキャン (ローカル部分)
         uint8_t changed = matrix_scan(local_matrix_state, system_millis);
@@ -100,15 +113,23 @@ int main()
                 if (global_matrix_state[r][c] != last_global_matrix_state[r][c]) {
                     changed = 1;
                     if (global_matrix_state[r][c] == 1) {
-                        keymap_process_press(r, c); // 押された瞬間
+                        keymap_process_press(r, c, system_millis); // 押された瞬間
+#ifdef CUSTOM_RGB_ENABLE
+                        rgb_led_notify_keypress(r, c);
+#endif
                     } else {
-                        keymap_process_release(r, c); // 離された瞬間
+                        keymap_process_release(r, c, system_millis); // 離された瞬間
                     }
                     last_global_matrix_state[r][c] = global_matrix_state[r][c]; // 状態更新
                 }
             }
         }
-        
+
+        // Tap/Hold のタップ送出終了など、時間で変化する要素を処理する
+        if (keymap_task(system_millis)) {
+            changed = 1;
+        }
+
         // 状態が変化した場合、USBレポートを作り直す
         if (changed) {
             // キャッシュ情報から最新のUSBレポートを構築
@@ -117,50 +138,16 @@ int main()
 	}
 }
 
-// Endpoint 2 (Custom/Raw HID) の OUT リクエスト (PC等からのコマンド受信)
+// Endpoint 2 (VIA Raw HID) の OUT リクエスト (Remap / Web UI からのコマンド受信)
 void usb_handle_user_data( struct usb_endpoint * e, int current_endpoint, uint8_t * data, int len, struct rv003usb_internal * ist )
 {
-    // 送信されてきたペイロードが8バイト以上あるか確認
-    if (len >= 8) {
-        uint8_t command_id = data[0];
-        
-        // 0x01: キー書き込みコマンド
-        if (command_id == 0x01) {
-            uint8_t layer = data[1];
-            uint8_t row   = data[2];
-            uint8_t col   = data[3];
-            uint16_t keycode = ((uint16_t)data[4] << 8) | data[5];
-            
-            // 境界チェック (不正な配列アクセス防止)
-            if (layer < LAYERS && row < LOGICAL_ROWS && col < LOGICAL_COLS) {
-                current_keymap[layer][row][col] = keycode;
-            }
-        }
-        // 0x02: キー読み出しコマンド
-        else if (command_id == 0x02) {
-            uint8_t layer = data[1];
-            uint8_t row   = data[2];
-            uint8_t col   = data[3];
-            
-            if (layer < LAYERS && row < LOGICAL_ROWS && col < LOGICAL_COLS) {
-                uint16_t key = current_keymap[layer][row][col];
-                
-                // EP2 INエンドポイントでポーリングされた際にこれを返す
-                current_custom_report[0] = 0x02;
-                current_custom_report[1] = layer;
-                current_custom_report[2] = row;
-                current_custom_report[3] = col;
-                current_custom_report[4] = (key >> 8) & 0xFF;
-                current_custom_report[5] = key & 0xFF;
-                current_custom_report[6] = 0x00;
-                current_custom_report[7] = 0x00;
-            }
-        }
-        // Phase 4: フラッシュ保存処理
-        else if (command_id == 0x99) {
-            // コールバック内（割り込み処理中）でFlash操作を行うとフリーズする危険があるため、メインループへ処理を委譲します
-            pending_flash_save = 1;
-        }
+    if( current_endpoint == 2 )
+    {
+        // Low-Speed USB では 1 パケット 8 バイトが上限のため、
+        // VIA の 32 バイトレポートは via.c 側で組み立てます。
+        // rv003usb はこの関数から戻った直後に ACK を返すので、
+        // 実際のコマンド処理はメインループの via_task() へ委譲しています。
+        via_receive_packet( data, len );
     }
 }
 
@@ -169,7 +156,7 @@ void usb_handle_user_in_request( struct usb_endpoint * e, uint8_t * scratchpad, 
 {
     // ホストからポーリング要求が来た = USB接続確立とみなす
     usb_configured_flag = 1;
-    
+
 	if( endp == 1 )
 	{
 		// EP1 Boot Keyboard: キー判定により更新されたレポートを送信
@@ -177,8 +164,8 @@ void usb_handle_user_in_request( struct usb_endpoint * e, uint8_t * scratchpad, 
 	}
 	else if( endp == 2 )
 	{
-		// EP2 Custom HID: 現在のカスタムレポートを返す (未使用時はゼロ)
-		usb_send_data( current_custom_report, 8, 0, sendtok );
+		// EP2 VIA Raw HID: 応答待ちがあれば 8 バイトずつ返す
+		via_handle_in( e, sendtok );
 	}
 	else
 	{

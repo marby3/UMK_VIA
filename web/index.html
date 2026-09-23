@@ -6,11 +6,11 @@
     <title>UIAPduino VIA - WebHID Configurator</title>
     <meta name="description" content="A powerful WebHID configurator for the UIAPduino custom keyboard.">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Outfit:wght@700&display=swap" rel="stylesheet">
-    <script src="protocol.js?v=11" defer></script>
-    <script src="hid_app.js?v=11" defer></script>
-    <script src="builder_app.js?v=11" defer></script>
-    <script src="tester_app.js?v=11" defer></script>
-    <script src="flasher_app.js?v=11" defer></script>
+    <script src="protocol.js?v=12" defer></script>
+    <script src="hid_app.js?v=12" defer></script>
+    <script src="builder_app.js?v=12" defer></script>
+    <script src="tester_app.js?v=12" defer></script>
+    <script src="flasher_app.js?v=12" defer></script>
 </head>
 <body>
     <script>
@@ -322,9 +322,27 @@
                             <label class="checkbox-label">
                                 <input type="checkbox" id="enableRGB"> RGB LED
                             </label>
-                            <div id="rgbConfig" class="feature-config hidden">
-                                <label>Data Pin (DIN)</label>
-                                <select id="pinRgbDin" class="modern-select pin-select"></select>
+                            <div id="rgbConfig" class="feature-config hidden" style="display:flex; flex-direction:column; gap:12px;">
+                                <div>
+                                    <label>Data Pin (DIN) <span style="font-size:0.8rem; color:#f36;">※PC6固定</span></label>
+                                    <div class="subtitle" style="font-size:0.8rem; margin-bottom:4px;">USBの安定性を保つため、SPIハードウェアに対応したPC6のみ使用可能です。</div>
+                                    <select id="pinRgbDin" class="modern-select" disabled>
+                                        <option value="PC6" selected>PC6</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label>Number of LEDs (LEDの数)</label>
+                                    <input type="number" id="rgbNumLeds" class="modern-input" value="1" min="1" max="100">
+                                </div>
+                                <div>
+                                    <label>Animation Mode (初期モード)</label>
+                                    <select id="rgbMode" class="modern-select">
+                                        <option value="0">Rainbow (虹色ローテーション)</option>
+                                        <option value="1">Static (単色点灯)</option>
+                                        <option value="2">Breathing (ホタル点滅)</option>
+                                        <option value="3">Reactive (打鍵時のみ発光)</option>
+                                    </select>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -343,6 +361,7 @@
                 <div class="editor-toolbar" style="display:flex; flex-wrap:wrap; align-items:center; gap:16px;">
                     <button id="btnAddKey" class="glow-btn">➕ Add Key</button>
                     <button id="btnDownloadJson" class="glow-btn">↓ Download Def. JSON</button>
+                    <button id="btnDownloadRemapJson" class="glow-btn" title="remap-keys.app へ登録するための VIA 形式のキーボード定義ファイルを書き出します">↓ Remap用 定義JSON</button>
                     <div style="display:inline-flex; align-items:center;">
                         <label for="uploadJson" class="glow-btn" style="cursor: pointer; display: inline-block;">↑ Upload Def. JSON</label>
                         <input type="file" id="uploadJson" accept=".json" style="display: none;">

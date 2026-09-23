@@ -1,0 +1,18 @@
+{
+  "name": "test",
+  "vendorId": "0x1209",
+  "productId": "0xb803",
+  "matrix": {
+    "rows": 1,
+    "cols": 3
+  },
+  "layouts": {
+    "keymap": [
+      [
+        "0,0",
+        "0,1",
+        "0,2"
+      ]
+    ]
+  }
+}

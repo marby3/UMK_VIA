@@ -1,8 +1,10 @@
 const protocol = new UIAPduinoProtocol();
 
 // QMKの標準的な基本的なキーコードリスト (一部抜粋)
+// 値は QMK / VIA と同じ 16bit キーコードです。
 const QMK_KEYCODES = {
-  0x00: '▽ (TRNS)',
+  0x00: '× (NO)',
+  0x01: '▽ (TRNS)',
   0x04: 'A', 0x05: 'B', 0x06: 'C', 0x07: 'D', 0x08: 'E', 0x09: 'F', 0x0A: 'G',
   0x0B: 'H', 0x0C: 'I', 0x0D: 'J', 0x0E: 'K', 0x0F: 'L', 0x10: 'M', 0x11: 'N',
   0x12: 'O', 0x13: 'P', 0x14: 'Q', 0x15: 'R', 0x16: 'S', 0x17: 'T', 0x18: 'U',
@@ -21,22 +23,82 @@ const MODIFIER_KEYCODES = {
   0xE4: 'RCtrl', 0xE5: 'RShift', 0xE6: 'RAlt', 0xE7: 'RGUI'
 };
 
+// QMK のレイヤー操作キーコード (TO=0x5200+n, MO=0x5220+n, DF=0x5240+n, TG=0x5260+n)
+const QK_TO = 0x5200;
+const QK_MOMENTARY = 0x5220;
+const QK_DEF_LAYER = 0x5240;
+const QK_TOGGLE_LAYER = 0x5260;
+
 const LAYER_KEYCODES = {
-  0x0101: 'MO(1)', 0x0102: 'MO(2)', 0x0103: 'MO(3)',
-  0x0201: 'TG(1)', 0x0202: 'TG(2)', 0x0203: 'TG(3)',
-  0x0300: 'TO(0)', 0x0301: 'TO(1)', 0x0302: 'TO(2)', 0x0303: 'TO(3)'
+  0x5221: 'MO(1)', 0x5222: 'MO(2)', 0x5223: 'MO(3)',
+  0x5261: 'TG(1)', 0x5262: 'TG(2)', 0x5263: 'TG(3)',
+  0x5200: 'TO(0)', 0x5201: 'TO(1)', 0x5202: 'TO(2)', 0x5203: 'TO(3)',
+  0x5240: 'DF(0)', 0x5241: 'DF(1)', 0x5242: 'DF(2)', 0x5243: 'DF(3)'
 };
+
+// QK_MODS のモディファイアビット (上位バイト側)
+const QK_MOD_CTRL = 0x01;
+const QK_MOD_SHIFT = 0x02;
+const QK_MOD_ALT = 0x04;
+const QK_MOD_GUI = 0x08;
+
+const DEFAULT_LAYER_COUNT = 4;
 
 // 内部状態
 const state = {
     layer: 0,
     rows: 4,
     cols: 6,
-    keymap: Array(4).fill(0).map(() => Array(16).fill(0).map(() => Array(16).fill(0x00))),
+    layerCount: DEFAULT_LAYER_COUNT,
+    keymap: Array(DEFAULT_LAYER_COUNT).fill(0).map(() => Array(16).fill(0).map(() => Array(16).fill(0x00))),
     selectedKeyId: null, // Layout上の選択中キー（インデックス）
     layoutDef: [], // JSONから読み込んだキーの座標や行列情報
     unitSize: 54
 };
+
+// キーマップ格納用の配列を現在のレイヤー数・マトリクスサイズに合わせて確保し直す
+function allocateKeymapState() {
+    state.keymap = Array(state.layerCount).fill(0).map(
+        () => Array(Math.max(state.rows, 16)).fill(0).map(
+            () => Array(Math.max(state.cols, 16)).fill(0x0000)));
+}
+
+// 16bit キーコードを表示用ラベルへ変換する
+function describeKeycode(code) {
+    if (code === 0x0000) return '×';
+    if (code === 0x0001) return '▽';
+
+    if (LAYER_KEYCODES[code]) return LAYER_KEYCODES[code];
+
+    // レイヤー操作 (テーブルに無いレイヤー番号)
+    if (code >= QK_TO && code <= QK_TO + 0x1F) return `TO(${code & 0x1F})`;
+    if (code >= QK_MOMENTARY && code <= QK_MOMENTARY + 0x1F) return `MO(${code & 0x1F})`;
+    if (code >= QK_DEF_LAYER && code <= QK_DEF_LAYER + 0x1F) return `DF(${code & 0x1F})`;
+    if (code >= QK_TOGGLE_LAYER && code <= QK_TOGGLE_LAYER + 0x1F) return `TG(${code & 0x1F})`;
+
+    // Layer-Tap / Mod-Tap
+    if (code >= 0x4000 && code <= 0x4FFF) {
+        return `LT${(code >> 8) & 0x0F}(${describeKeycode(code & 0xFF)})`;
+    }
+    if (code >= 0x2000 && code <= 0x3FFF) {
+        return `MT(${describeKeycode(code & 0xFF)})`;
+    }
+
+    // 基本キー / モディファイア付き基本キー
+    const base = code & 0xFF;
+    const mods = (code >> 8) & 0x1F;
+    const label = QMK_KEYCODES[base] || MODIFIER_KEYCODES[base] || `0x${base.toString(16)}`;
+
+    if (mods === 0) return label;
+
+    const isRight = (mods & 0x10) !== 0;
+    let modStr = '';
+    if (mods & QK_MOD_CTRL) modStr += isRight ? 'RC-' : 'C-';
+    if (mods & QK_MOD_SHIFT) modStr += isRight ? 'RS-' : 'S-';
+    if (mods & QK_MOD_ALT) modStr += isRight ? 'RA-' : 'A-';
+    if (mods & QK_MOD_GUI) modStr += isRight ? 'RW-' : 'W-';
+    return modStr + label;
+}
 
 // DOM
 const elOverlay = document.getElementById('keymapOverlay');
@@ -149,25 +211,36 @@ function parseKeyboardDefinitionFile(def) {
     }
     const keymap = def.layouts && def.layouts.keymap ? def.layouts.keymap : def;
     if (!Array.isArray(keymap)) return false;
-    
+
     let parsedKeys = [];
     let curX = 0, curY = 0;
     let cProps = { w: 1, h: 1, x: 0, y: 0, r: 0, rx: 0, ry: 0, row: 0, col: 0, w2: 0, h2: 0, x2: 0, y2: 0 };
-    
+
     for (let r = 0; r < keymap.length; r++) {
         let row = keymap[r];
         if (!Array.isArray(row)) continue;
-        
+
         for (let i = 0; i < row.length; i++) {
             let item = row[i];
             if (typeof item === 'string') {
                 curX += cProps.x;
                 curY += cProps.y;
+
+                // VIA/Remap 形式ではレジェンドの1行目が "row,col" になっています。
+                // 本プロジェクト独自形式の {row, col} プロパティにも対応します。
+                let row_ = cProps.row || 0;
+                let col_ = cProps.col || 0;
+                const posMatch = /^(\d+)\s*,\s*(\d+)/.exec(item.split('\n')[0]);
+                if (posMatch) {
+                    row_ = parseInt(posMatch[1], 10);
+                    col_ = parseInt(posMatch[2], 10);
+                }
+
                 parsedKeys.push({
                     x: curX, y: curY, w: cProps.w, h: cProps.h,
                     r: cProps.r, rx: cProps.rx, ry: cProps.ry,
                     w2: cProps.w2, h2: cProps.h2, x2: cProps.x2, y2: cProps.y2,
-                    row: cProps.row || 0, col: cProps.col || 0,
+                    row: row_, col: col_,
                     label: item
                 });
                 curX += cProps.w;
@@ -181,6 +254,10 @@ function parseKeyboardDefinitionFile(def) {
         curX = 0;
     }
     state.layoutDef = parsedKeys;
+
+    // 読み込んだマトリクスサイズに合わせてキーマップ配列を確保し直す
+    allocateKeymapState();
+
     renderLayoutKeys();
     return true;
 }
@@ -223,20 +300,12 @@ function renderLayoutKeys() {
         }
 
         // キーコードから表示ラベルを取得
-        const rawCode = state.keymap[state.layer][k.row][k.col];
-        const baseCode = rawCode & 0x0FFF; // QMK互換フラグ想定
-        const mods = (rawCode >> 12) & 0xF;
-        
-        let label = QMK_KEYCODES[baseCode] || MODIFIER_KEYCODES[baseCode] || LAYER_KEYCODES[baseCode] || `0x${baseCode.toString(16)}`;
-        if (baseCode === 0) label = "▽";
-        
-        let modStr = "";
-        if(mods & 0x1) modStr += "C-";
-        if(mods & 0x2) modStr += "S-";
-        if(mods & 0x4) modStr += "A-";
-        if(mods & 0x8) modStr += "W-";
+        const rawCode = (state.keymap[state.layer] &&
+                         state.keymap[state.layer][k.row] &&
+                         state.keymap[state.layer][k.row][k.col]) || 0x0000;
+        const label = describeKeycode(rawCode);
 
-        div.innerHTML = `<span style="font-size:0.9rem;">${modStr}${label}</span><br><span class="keycode-label">[${k.row},${k.col}]</span>`;
+        div.innerHTML = `<span style="font-size:0.9rem;">${label}</span><br><span class="keycode-label">[${k.row},${k.col}]</span>`;
         div.addEventListener('click', () => {
             state.selectedKeyId = idx;
             renderLayoutKeys(); // activeクラス更新
@@ -270,22 +339,29 @@ async function assignKeycode(baseCode, targetIdx = state.selectedKeyId) {
     if (!k) return;
 
     let mods = 0;
-    if (elModCtrl.checked) mods |= 0x1;
-    if (elModShift.checked) mods |= 0x2;
-    if (elModAlt.checked) mods |= 0x4;
-    if (elModWin.checked) mods |= 0x8;
-    
-    // VIA等のQMK互換エンコーディング: mods(4bit) << 12 | baseCode(12bit)
-    const finalCode = (mods << 12) | (baseCode & 0x0FFF);
-    
+    if (elModCtrl.checked) mods |= QK_MOD_CTRL;
+    if (elModShift.checked) mods |= QK_MOD_SHIFT;
+    if (elModAlt.checked) mods |= QK_MOD_ALT;
+    if (elModWin.checked) mods |= QK_MOD_GUI;
+
+    // QMK/VIA のエンコーディング: 基本キーは 0x00-0xFF、
+    // モディファイア付きは mods(5bit) << 8 | 基本キー(8bit)。
+    // レイヤー操作キー等 (0x0100 以上) にはモディファイアを付けない。
+    const finalCode = (baseCode <= 0xFF && mods !== 0)
+        ? ((mods << 8) | baseCode)
+        : baseCode;
+
     // RAMマップ更新
     state.keymap[state.layer][k.row][k.col] = finalCode;
     renderLayoutKeys();
 
     // デバイスが接続されていればすぐ送信
     if (protocol.isConnected) {
-        const ok = await protocol.writeKey(state.layer, k.row, k.col, finalCode);
-        if (!ok) console.error("Failed to write key to device");
+        try {
+            await protocol.setKeycode(state.layer, k.row, k.col, finalCode);
+        } catch (e) {
+            console.error("Failed to write key to device:", e);
+        }
     }
     
     // 自動的に次のキーへフォーカスを移す
@@ -303,8 +379,11 @@ function openKeycodeModal(idx) {
     elKeycodeSelect.innerHTML = '';
     
     const k = state.layoutDef.length > 0 ? state.layoutDef[idx] : generateDefaultLayout()[idx];
-    const rawCode = state.keymap[state.layer][k.row][k.col];
-    const baseCode = rawCode & 0x0FFF;
+    const rawCode = (state.keymap[state.layer] &&
+                     state.keymap[state.layer][k.row] &&
+                     state.keymap[state.layer][k.row][k.col]) || 0x0000;
+    // レイヤー操作キー等はキーコードそのもの、基本キーは下位8bitで選択状態を判定する
+    const baseCode = rawCode <= 0x1FFF ? (rawCode & 0xFF) : rawCode;
 
     const addGroup = (groupName, obj) => {
         const optgroup = document.createElement('optgroup');
@@ -381,33 +460,31 @@ async function connectAndSync() {
 
 async function syncKeymapFromDevice() {
     elStatusText.textContent = 'デバイスから設定を読み込み中...';
-    // 行優先でデバイスの現在のキーマップを取得する
-    for (let l = 0; l < 4; l++) {
-        for (let r = 0; r < state.rows; r++) {
-            for (let c = 0; c < state.cols; c++) {
-                await protocol.readKeyRequest(l, r, c);
-                // 約10ms待機 (USB HIDのフラッディング防止)
-                await new Promise(resolve => setTimeout(resolve, 10));
+
+    try {
+        const version = await protocol.getProtocolVersion();
+        state.layerCount = await protocol.getLayerCount() || DEFAULT_LAYER_COUNT;
+        allocateKeymapState();
+
+        // キーマップ全体を一括で読み出す (VIA の dynamic_keymap_get_buffer)
+        const keymap = await protocol.readAllKeymaps(state.layerCount, state.rows, state.cols);
+        for (let l = 0; l < keymap.length; l++) {
+            for (let r = 0; r < keymap[l].length; r++) {
+                for (let c = 0; c < keymap[l][r].length; c++) {
+                    state.keymap[l][r][c] = keymap[l][r][c];
+                }
             }
         }
-    }
-    elStatusText.textContent = 'デバイス接続済 (同期完了)';
-}
 
-// デバイスから0x02コマンドによるキーコード読み出しの返答
-protocol.onInputReport = (data) => {
-    if (data[0] === 0x02) {
-        const layer = data[1];
-        const row = data[2];
-        const col = data[3];
-        const keycode = (data[4] << 8) | data[5];
-        
-        if (layer < 4) {
-            state.keymap[layer][row][col] = keycode;
-            if (state.layer === layer) renderLayoutKeys();
-        }
+        if (state.layer >= state.layerCount) state.layer = 0;
+        renderLayoutKeys();
+        elStatusText.textContent =
+            `デバイス接続済 (VIA v${version >> 8}.${version & 0xFF} / ${state.layerCount}レイヤー)`;
+    } catch (e) {
+        console.error(e);
+        elStatusText.textContent = `読み込みに失敗しました: ${e.message}`;
     }
-};
+}
 
 protocol.onDisconnect = () => {
     updateConnectionStatus();
@@ -419,18 +496,31 @@ elBtnConnectOverlay.addEventListener('click', connectAndSync);
 
 elBtnSaveToFlash.addEventListener('click', async () => {
     if (!protocol.isConnected) return;
+    const originalLabel = elBtnSaveToFlash.textContent;
+    elBtnSaveToFlash.disabled = true;
+    elBtnSaveToFlash.textContent = 'Flashへ保存中...';
     try {
         await protocol.saveToFlash();
-        elBtnSaveToFlash.disabled = true;
-        elBtnSaveToFlash.textContent = 'Flashへ保存中...';
+        elBtnSaveToFlash.textContent = '保存しました';
+        setTimeout(() => { elBtnSaveToFlash.textContent = originalLabel; }, 1500);
     } catch (e) {
+        console.error(e);
         alert("保存に失敗しました");
+        elBtnSaveToFlash.textContent = originalLabel;
+    } finally {
+        elBtnSaveToFlash.disabled = false;
     }
 });
 
-elBtnResetKeymap.addEventListener('click', () => {
-    if(confirm('キーマップを現在デバイスに保存されている状態にリセットしますか？')) {
-        if(protocol.isConnected) syncKeymapFromDevice();
+elBtnResetKeymap.addEventListener('click', async () => {
+    if (!protocol.isConnected) return;
+    if (!confirm('デバイスのキーマップをファームウェアの初期値へ戻しますか？\n(現在の設定は失われます)')) return;
+    try {
+        await protocol.resetKeymap();
+        await syncKeymapFromDevice();
+    } catch (e) {
+        console.error(e);
+        alert("初期化に失敗しました");
     }
 });
 

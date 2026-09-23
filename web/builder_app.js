@@ -41,6 +41,7 @@ const elCanvasContainer = document.getElementById('layoutCanvasContainer');
 const btnAddKey = document.getElementById('btnAddKey');
 const btnDeleteKey = document.getElementById('btnDeleteKey');
 const btnDownloadJson = document.getElementById('btnDownloadJson');
+const btnDownloadRemapJson = document.getElementById('btnDownloadRemapJson');
 const uploadJson = document.getElementById('uploadJson');
 
 const matrixSvgLayer = document.getElementById('matrixSvgLayer');
@@ -143,7 +144,9 @@ elEnableRGB.addEventListener('change', (e) => {
     if(e.target.checked) elRgbConfig.classList.remove('hidden');
     else elRgbConfig.classList.add('hidden');
 });
-elPinRgbDin.replaceWith(createPinSelect('pinRgbDin'));
+
+const elRgbNumLeds = document.getElementById('rgbNumLeds');
+const elRgbMode = document.getElementById('rgbMode');
 
 const elEnableSplit = document.getElementById('enableSplit');
 const elSplitConfig = document.getElementById('splitConfig');
@@ -254,6 +257,45 @@ btnBuildFirmware.addEventListener('click', async () => {
         }
     }
     
+    // --- [NEW] Pin Conflict Validator ---
+    const usedPins = new Set();
+    const allConfiguredPins = [];
+    
+    if (wm === 'matrix') {
+        allConfiguredPins.push(...rowPins, ...colPins);
+    } else if (wm === 'direct') {
+        allConfiguredPins.push(...directPinsList);
+    }
+    
+    if (elEnableSplit.checked) {
+        allConfiguredPins.push(document.getElementById('pinHandedness').value);
+    }
+    
+    if (elEnableRGB.checked) {
+        // RGB is strictly on PC6 physically
+        allConfiguredPins.push("PC6");
+    }
+    
+    let hasConflict = false;
+    for (const pin of allConfiguredPins) {
+        if (!pin) continue; // Skip empty pins
+        if (pin === "0") continue; // 0 could imply none
+        
+        if (usedPins.has(pin)) {
+            hasConflict = true;
+            break;
+        }
+        usedPins.add(pin);
+    }
+    
+    if (hasConflict) {
+        alert("【エラー】ピン名の重複・競合が検出されました。\nマトリクス(Row/Col)、Direct Pins、Split(左右判別)、RGB LED(PC6) の間で同じピンが複数に割り当てられていないか確認してください。");
+        buildLog.textContent = '> Build Failed: Pin Conflict Detected!';
+        btnBuildFirmware.disabled = false;
+        return;
+    }
+    // ------------------------------------
+
     const requestData = {
         name: elDevName.value || 'UIAPduino_VIA',
         vid: elDevVid.value || '0x1209',
@@ -267,6 +309,12 @@ btnBuildFirmware.addEventListener('click', async () => {
             enabled: elEnableSplit.checked,
             handedness_pin: document.getElementById('pinHandedness').value,
             combine_mode: elSplitCombineMode.value
+        },
+        rgb: {
+            enabled: elEnableRGB.checked,
+            pin: "PC6",
+            num_leds: parseInt(elRgbNumLeds.value) || 1,
+            mode: parseInt(elRgbMode.value) || 0
         }
     };
 
@@ -709,6 +757,13 @@ function generateKeyboardDefinition() {
         handedness_pin: document.getElementById('pinHandedness').value,
         combine_mode: elSplitCombineMode.value
     };
+    
+    let rgbConfig = {
+        enabled: elEnableRGB.checked,
+        pin: "PC6",
+        num_leds: parseInt(elRgbNumLeds.value) || 1,
+        mode: parseInt(elRgbMode.value) || 0
+    };
 
     return {
         name: elDevName.value || "UIAPduino Custom Keyboard",
@@ -716,6 +771,7 @@ function generateKeyboardDefinition() {
         productId: elDevPid.value || "0xb803",
         matrix: matrixConfig,
         split: splitConfig,
+        rgb: rgbConfig,
         layouts: {
             keymap: keymapArray
         }
@@ -730,6 +786,108 @@ btnDownloadJson.addEventListener('click', () => {
     dlAnchorElem.setAttribute("download", "keyboard_definition.json");
     dlAnchorElem.click();
 });
+
+// --- Remap / VIA 用キーボード定義 ---
+
+// USB ID を Remap のスキーマ (^0x[0-9a-zA-Z]{1,4}$) に合う形へ整える
+function normalizeUsbId(value, fallback) {
+    let text = (value || '').trim() || fallback;
+    if (!text.toLowerCase().startsWith('0x')) text = '0x' + text;
+    const digits = text.slice(2).toLowerCase().replace(/^0+/, '');
+    return '0x' + digits.padStart(4, '0').slice(-4);
+}
+
+// Split 有効時、VIA から見えるマトリクスは結合後の論理サイズになります
+// (firmware/matrix.h の LOGICAL_ROWS / LOGICAL_COLS と同じ規則)
+function getLogicalMatrixSize() {
+    const wm = getWiringMode();
+    let rows = wm === 'direct' ? 1 : (parseInt(elDevRows.value) || 4);
+    let cols = wm === 'direct' ? (directPinsList.length || 1) : (parseInt(elDevCols.value) || 6);
+
+    if (elEnableSplit.checked) {
+        if (elSplitCombineMode.value === 'right_to_left_cols') {
+            cols *= 2;
+        } else {
+            rows *= 2;
+        }
+    }
+    return { rows, cols };
+}
+
+// Remap (VIA 形式) のキーボード定義を生成する。
+// VIA ではキーの左上レジェンドが "row,col" である必要があるため、
+// 内部形式の {row, col} プロパティをレジェンド文字列へ変換します。
+function generateRemapDefinition() {
+    const { rows, cols } = getLogicalMatrixSize();
+    const wm = getWiringMode();
+
+    let kleRows = [];
+    keys.forEach(k => {
+        const yGroup = Math.floor(k.y);
+        if (!kleRows[yGroup]) kleRows[yGroup] = [];
+        kleRows[yGroup].push(k);
+    });
+    kleRows = kleRows.filter(r => r !== undefined);
+
+    const keymapArray = [];
+    let curY = 0;
+
+    kleRows.forEach(rowKeys => {
+        rowKeys.sort((a, b) => a.x - b.x);
+        const rowArray = [];
+        let rowStartX = 0;
+
+        rowKeys.forEach((k, idx) => {
+            const props = {};
+            if (k.w !== 1) props.w = k.w;
+            if (k.h !== 1) props.h = k.h;
+            if (k.x - rowStartX > 0) props.x = k.x - rowStartX;
+            if (idx === 0 && (k.y - curY) > 0) props.y = k.y - curY;
+            if (k.r) props.r = k.r;
+            if (k.rx) props.rx = k.rx;
+            if (k.ry) props.ry = k.ry;
+
+            if (Object.keys(props).length > 0) rowArray.push(props);
+
+            const row = wm === 'direct' ? 0 : (k.row || 0);
+            const col = wm === 'direct' ? idx : (k.col || 0);
+            rowArray.push(`${row},${col}`);
+
+            rowStartX = k.x + k.w;
+        });
+
+        keymapArray.push(rowArray);
+        curY++;
+    });
+
+    // レイアウト未編集の場合はマトリクスそのままの格子を出力する
+    if (keymapArray.length === 0) {
+        for (let r = 0; r < rows; r++) {
+            const rowArray = [];
+            for (let c = 0; c < cols; c++) rowArray.push(`${r},${c}`);
+            keymapArray.push(rowArray);
+        }
+    }
+
+    return {
+        name: elDevName.value || 'UIAPduino_VIA',
+        vendorId: normalizeUsbId(elDevVid.value, '0x1209'),
+        productId: normalizeUsbId(elDevPid.value, '0xb803'),
+        matrix: { rows, cols },
+        layouts: { keymap: keymapArray }
+    };
+}
+
+if (btnDownloadRemapJson) {
+    btnDownloadRemapJson.addEventListener('click', () => {
+        const def = generateRemapDefinition();
+        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(def, null, 2));
+        const dlAnchorElem = document.createElement('a');
+        dlAnchorElem.setAttribute("href", dataStr);
+        dlAnchorElem.setAttribute("download", "remap_definition.json");
+        dlAnchorElem.click();
+    });
+}
 
 // btnDownloadFw Event Listener removed, handled directly via pseudo href
 
@@ -768,6 +926,16 @@ function parseKeyboardDefinition(def) {
     } else {
         elEnableSplit.checked = false;
         elEnableSplit.dispatchEvent(new Event('change'));
+    }
+    
+    if(def.rgb) {
+        elEnableRGB.checked = !!def.rgb.enabled;
+        elEnableRGB.dispatchEvent(new Event('change'));
+        if (def.rgb.num_leds) elRgbNumLeds.value = def.rgb.num_leds;
+        if (def.rgb.mode !== undefined) elRgbMode.value = def.rgb.mode;
+    } else {
+        elEnableRGB.checked = false;
+        elEnableRGB.dispatchEvent(new Event('change'));
     }
     
     let keymap = def.layouts && def.layouts.keymap ? def.layouts.keymap : def;

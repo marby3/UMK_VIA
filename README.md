@@ -7,6 +7,8 @@ It aims to provide a complete, browser-first experience for writing firmware, co
 
 - **Web Flasher**: Directly flash firmware from your browser using WebUSB.
 - **Key Mapping**: Visually configure your keyboard layout and save it to the device in real-time.
+- **VIA / Remap Support**: The firmware speaks the VIA protocol, so you can also edit keymaps with
+  [Remap](https://remap-keys.app). See [docs/remap_usage.md](docs/remap_usage.md).
 - **Key Tester**: Test each switch and make sure your keyboard is fully functional.
 - **Firmware Builder (Dev)**: Generate custom firmware setups within the browser.
 - **Layout Editor (Dev)**: Manage layout definitions intuitively.

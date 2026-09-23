@@ -3,8 +3,8 @@
 
 #include <stdint.h>
 
-#if __has_include("custom_config.h")
-#include "custom_config.h"
+#if __has_include("config.h")
+#include "config.h"
 #endif
 
 #ifndef CUSTOM_MATRIX_ROWS
@@ -35,6 +35,9 @@
     #define LOGICAL_ROWS MATRIX_ROWS
     #define LOGICAL_COLS MATRIX_COLS
 #endif
+
+// 分割キーボード結合後の論理マトリクス状態 (実体は main.c)
+extern uint8_t global_matrix_state[LOGICAL_ROWS][LOGICAL_COLS];
 
 // Initialize the matrix GPIO pins
 void matrix_init(void);

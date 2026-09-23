@@ -4,8 +4,8 @@
 #include <stdint.h>
 #include "matrix.h"
 
-#ifdef CUSTOM_CONFIG_H
-#include "custom_config.h"
+#if __has_include("config.h")
+#include "config.h"
 #endif
 
 // Role definitions

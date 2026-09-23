@@ -10,3 +10,5 @@
 # Editor/OS files
 .DS_Store
 .vscode/
+.claude/
+.history/
