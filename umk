@@ -1,0 +1,3 @@
+#!/bin/sh
+# umk - UMK_VIA build CLI. See tools/umk.py.
+exec "${PYTHON:-python3}" "$(dirname "$0")/tools/umk.py" "$@"
