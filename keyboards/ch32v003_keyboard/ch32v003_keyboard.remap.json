@@ -1,0 +1,12 @@
+{
+  "name": "CH32V003_keyboard",
+  "vendorId": "0x1209",
+  "productId": "0xb803",
+  "matrix": { "rows": 2, "cols": 3 },
+  "layouts": {
+    "keymap": [
+      ["0,0", "0,1", "0,2"],
+      ["1,0", "1,1", "1,2"]
+    ]
+  }
+}
