@@ -1,12 +1,15 @@
-# Build output
-*.elf
-*.bin
-*.hex
-*.map
-*.lst
-*.o
-*.a
+# All build output goes here
+/build/
 
-# Editor/OS files
-.DS_Store
-.vscode/
+__pycache__/
+*.pyc
+
+# ch32fun.mk writes this literal file when its Windows NULLDEV meets a POSIX shell
+firmware/nul
+
+# VS Code Local History extension
+.history/
+
+# AI review runs: keep the reviewer config, not the per-run prompts and reports
+.review/*
+!.review/config
