@@ -16,11 +16,15 @@ main          リリースだけが入る。タグはここにだけ付く
      └─ chore/N   ビルド・ツール・文書・リファクタ (Issue #N)
 ```
 
+この 3 層のほかに使うブランチは、保存専用の `archive/*` と試作用の `spike/*` だけです (6・7 を参照)。
+
 1. **作業は Issue から始めます。** Issue にはラベルを必ず 2 つ付けます。種類を表す
    `type:feat` / `type:fix` / `type:chore` / `type:docs` から 1 つ、優先度を表す
    `priority: high` / `priority: medium` / `priority: low` から 1 つです。
 2. **作業ブランチは `dev` から切ります。** 名前は `feat/12` のように Issue 番号を付け、
-   `#` は入れません (PowerShell では `#` 以降がコメントになるため)。
+   `#` は入れません (PowerShell では `#` 以降がコメントになるため)。ブランチの種類は
+   Issue の種類に合わせます。`type:feat` なら `feat/N`、`type:fix` なら `fix/N`、
+   `type:chore` と `type:docs` なら `chore/N` です。
    Issue との紐付けは、コミット本文の `Refs: #12` で行います。
 
    ```bash
@@ -88,7 +92,8 @@ PATCH リリースを出します。
    gh pr merge --merge
    ```
 
-4. `main` のマージコミットにタグを付けて push します。
+4. `main` のマージコミットにタグを付けて push します。ローカルの `main` は更新せず、
+   fetch した `origin/main` (GitHub 上のマージコミット) に直接付けます。
 
    ```bash
    git fetch origin
