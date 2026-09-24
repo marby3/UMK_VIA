@@ -1,6 +1,9 @@
 # All build output goes here
 /build/
 
+# Flashable .bin + definition JSON sets handed out for testing
+/dist/
+
 __pycache__/
 *.pyc
 
